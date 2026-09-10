@@ -1,0 +1,35 @@
+{
+  "name": "proofly-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Proofly Level 1 — local proof-of-income demo. The private income never leaves this page.",
+  "overrides": {
+    "@midnight-ntwrk/onchain-runtime-v3": "3.1.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "predev": "npm run check:compiled",
+    "build": "npm run copy-zk-assets && tsc -b && vite build",
+    "prebuild": "npm run check:compiled",
+    "copy-zk-assets": "node scripts/copy-zk-assets.mjs",
+    "precopy-zk-assets": "npm run check:compiled",
+    "check:compiled": "node ../scripts/check-compiled.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@originjs/vite-plugin-commonjs": "1.0.3",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-node-polyfills": "^0.23.0",
+    "vite-plugin-wasm": "^3.4.1"
+  }
+}

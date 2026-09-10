@@ -1,0 +1,43 @@
+{
+  "name": "proofly",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Proofly — private proof-of-income ZK dApp on the Midnight Network. Level 1: minimal privacy-preserving income threshold circuit.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "overrides": {
+    "@midnight-ntwrk/onchain-runtime-v3": "3.1.0"
+  },
+  "scripts": {
+    "compile": "compact compile contracts/proofly.compact contracts/managed/proofly",
+    "check:compiled": "node scripts/check-compiled.mjs",
+    "copy-zk-assets": "node frontend/scripts/copy-zk-assets.mjs",
+    "precopy-zk-assets": "npm run check:compiled",
+    "build": "tsc --noEmit",
+    "prebuild": "npm run check:compiled",
+    "test": "vitest run",
+    "pretest": "npm run check:compiled",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "predev:frontend": "npm run check:compiled",
+    "build:frontend": "npm --prefix frontend run build",
+    "prebuild:frontend": "npm run check:compiled"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-js": "2.5.1",
+    "@midnight-ntwrk/compact-runtime": "0.16.0",
+    "@midnight-ntwrk/ledger-v8": "8.1.0",
+    "@midnight-ntwrk/midnight-js-node-zk-config-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-types": "4.1.1",
+    "@midnight-ntwrk/platform-js": "2.2.4",
+    "@midnight-ntwrk/zkir-v2": "2.1.0",
+    "effect": "3.22.1",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
+  }
+}

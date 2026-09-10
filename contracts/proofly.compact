@@ -1,0 +1,28 @@
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
+
+// Proofly — Level 1: private proof-of-income.
+//
+// Proves the predicate `privateIncome >= requiredMonthlyIncome` without
+// revealing the private income. The monthly income is supplied as a Compact
+// WITNESS (private); the minimum required income is a PUBLIC circuit
+// argument chosen by the verifier.
+//
+// Deliberately minimal at this stage: no applicant ids, no nullifiers,
+// no Merkle allowlists, no issuer, no revocation. Those arrive in later
+// levels.
+
+export ledger proofCount: Field;
+
+constructor() {
+  proofCount = 0;
+}
+
+witness income(): Uint<32>;
+
+export circuit proveIncome(requiredMonthlyIncome: Uint<32>): [] {
+  const privateIncome = income();
+  assert(privateIncome >= requiredMonthlyIncome, "Income below required minimum");
+  proofCount = proofCount + 1;
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.midnight-state.json
+.midnight-wallet-state/
+midnight-level-db/
+.env
+.env.local
+*.tsbuildinfo
+coverage/
+frontend/dist/
+frontend/node_modules/
+contracts/managed/
+frontend/src/compiled-contract.js
+frontend/src/compiled-contract.d.ts
+frontend/public/midnight/proofly/zkir/
+frontend/public/midnight/proofly/keys/
