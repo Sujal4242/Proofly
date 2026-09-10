@@ -2,13 +2,53 @@
 
 **Private Proof-of-Income on Midnight — prove `monthlyIncome >= requiredThreshold` without revealing the income.**
 
-Level 1 delivers the privacy-preserving foundation:
+Proofly runs as **two modes** in the same app and repository:
 
-- A minimal Compact contract (`contracts/proofly.compact`) whose only public data is a non-secret `proofCount` counter. The monthly income exists **exclusively as a Compact witness** and is never a circuit argument, never written to the ledger, and never disclosed.
-- A test suite that produces and verifies a **real Groth16 proof** from the compiled artifacts and asserts the privacy property byte-for-byte (public inputs are identical for different incomes at the same threshold).
-- A static React/Vite frontend that runs the same compiled circuit **entirely in the browser tab** — the income never leaves the page.
+- **Local Demo** — the offline, wallet-free experience. Generates and verifies the
+  zero-knowledge proof using the real compiled circuit entirely in the browser
+  tab, and demonstrates the privacy property (different incomes → byte-identical
+  public inputs). Works without Lace or Preprod.
+- **Live Preprod** — the real Midnight flow. Connects the **Lace wallet**
+  (Midnight DApp Connector) to **Midnight Preprod**, assembles the midnight-js
+  browser providers, and proves `income >= requiredMonthlyIncome` on a **deployed
+  Proofly contract** via `callTx.proveIncome(threshold)`. Requires Lace, a
+  deployed Proofly contract address, and testnet funds only — **no real money**.
 
-No backend. No wallet integration (Lace etc.) yet. There is nothing to deploy beyond static assets.
+## Privacy model
+
+- **Public:** `proofCount` on-chain ledger, the `requiredMonthlyIncome` circuit
+  argument (the ONLY circuit argument), and the ZK proof/transcript.
+- **Private:** the exact monthly income — the `income` witness only, in-memory in
+  the applicant's browser. Never a circuit argument, never ledger state, never
+  logged, never in a URL, never in localStorage/sessionStorage, never sent to a
+  custom API.
+- Enforced by tests: `tests/proofly.privacy.test.ts` (byte-identical public
+  inputs across different incomes at the same threshold), a real Groth16 proof
+  test in `tests/proofly.contract.test.ts`, and the Level 2 suite
+  (`tests/proofly.frontend-*.test.ts`) covering witness wiring, sub-threshold
+  denial, error classification, config defaults, and Live-mode gating when no
+  contract address is configured.
+
+The **Live mode UI never re-shows the entered income** after proof submission;
+only the Local Demo (an explicit local demonstration) displays the values the
+applicant typed.
+
+## Architecture
+
+```
+Browser static frontend (React + Vite)
+        ↓
+Lace DApp Connector (window.midnight)
+        ↓
+midnight-js providers (Midnight.js)
+        ↓
+Midnight Preprod (public indexer + deployed Proofly contract)
+```
+
+No custom backend. No server-side state, no proxy, no deployed "engine". The
+frontend is static; every network call goes to Midnight/Lace infrastructure or
+the public indexer. See `docs/LEVEL2-ARCHITECTURE.md` for the full provider and
+privacy architecture.
 
 ## Requirements
 
@@ -41,8 +81,6 @@ npm --version
 
 ### 2. Install the Compact CLI and pin the toolchain
 
-Install the `compact` CLI from the Midnight devtools (requires network access on first use; the toolchain is downloaded to `$HOME/.compact`). Then pin the compiler toolchain to 0.31.1:
-
 ```bash
 compact update 0.31.1
 compact list          # 0.31.1 should be marked with →
@@ -69,7 +107,11 @@ This regenerates `contracts/managed/proofly/` (gitignored) — the ZKIR, proving
 npm test
 ```
 
-Runs the full suite (contract behaviour, real Groth16 proof generation + verification, privacy byte-comparisons). The tests fetch the public Groth16 SRS parameters from Midnight's dev S3 fileshare on first run.
+Runs the full suite: contract behaviour, a real Groth16 proof generation +
+verification, privacy byte-comparisons (Level 1), plus the Level 2 frontend
+tests (witness wiring, sub-threshold denial, error classification, config
+defaults, Live-mode gating). The proof tests fetch the public Groth16 SRS
+parameters from Midnight's dev S3 fileshare on first run.
 
 ### 6. TypeScript checks
 
@@ -84,7 +126,19 @@ npm run build:frontend   # production build (also runs copy-zk-assets from the c
 npm run dev:frontend     # hot-reload dev server → http://localhost:5173
 ```
 
-`npm run dev:frontend` / `npm run build:frontend` run the compiled-contract guard first, so a missing `npm run compile` is caught immediately.
+### 8. Configure the Live Preprod contract address
+
+Live submission is **disabled until a real deployment provides the address**:
+
+```bash
+# Optional, once a contract is deployed on Preprod:
+cp frontend/.env.example frontend/.env
+# set VITE_CONTRACT_ADDRESS=<hex address from the deployment>
+```
+
+Until then the wallet can be connected and the provider foundation is real, but
+the "Prove income on Preprod" action stays disabled and the ProofCounter shows a
+clear "no deployed contract" state. No contract address is invented.
 
 ## GitHub Actions compatibility
 
@@ -96,18 +150,22 @@ actions/checkout@v4 → actions/setup-node@v4 (node 22) → npm ci (root + front
 → npm run build (tsc) → npm run build:frontend → npm test
 ```
 
-## Privacy model (Level 1)
-
-- **Public:** `proofCount` on-chain ledger, the `requiredMonthlyIncome` circuit argument, and the ZK proof/transcript.
-- **Private:** the exact monthly income — the `income` witness only, in-memory in the applicant's browser tab. Not logged, not stored, not sent anywhere.
-- Enforced by tests: `tests/proofly.privacy.test.ts` asserts byte-identical public inputs across different incomes at the same threshold, and `tests/proofly.contract.test.ts` produces and verifies a real Groth16 proof for the compiled `proveIncome` circuit.
-
 ## Repository layout
 
 ```
-contracts/proofly.compact            ← the Compact contract (source of truth)
-scripts/check-compiled.mjs           ← shared guard used by npm lifecycle hooks
-tests/                               ← vitest suite (contract + privacy)
-frontend/                            ← static Vite/React demo (local in-browser proof)
-contracts/managed/proofly/           ← generated by `npm run compile` (gitignored)
+contracts/proofly.compact                 ← the Compact contract (source of truth)
+scripts/check-compiled.mjs                ← shared guard used by npm lifecycle hooks
+tests/                                    ← vitest suite (contract + privacy + L2 frontend)
+frontend/                                 ← static Vite/React app
+frontend/src/config.ts                    ← public config (Preprod defaults, no income)
+frontend/src/hooks/useMidnight.ts         ← Lace discovery, connect, disconnect
+frontend/src/hooks/useProofly.ts          ← Live proof + proofCount reads
+frontend/src/midnight/providers.ts        ← 7 midnight-js browser providers
+frontend/src/midnight/contract-service.ts ← CC.make('proofly').pipe(withWitnesses)
+frontend/src/midnight/witnesses.ts        ← THE privacy boundary (income witness)
+frontend/src/midnight/errors.ts           ← denied vs wallet/funds/network classification
+frontend/src/components/                  ← LocalDemo, WalletConnect, ProofPanel, ...
+frontend/.env.example                     ← VITE_NETWORK_ID / VITE_CONTRACT_ADDRESS / indexer
+docs/LEVEL2-ARCHITECTURE.md               ← provider + privacy architecture (Level 2)
+contracts/managed/proofly/                ← generated by `npm run compile` (gitignored)
 ```

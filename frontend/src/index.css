@@ -210,6 +210,118 @@ li code {
   line-height: 1.5;
 }
 
+/* ---- Level 2: mode switch, wallet, status, counter ---- */
+
+.mode-switch {
+  display: flex;
+  gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 6px;
+  border-radius: 12px;
+  margin: 22px 0 8px;
+  width: fit-content;
+}
+.mode-switch button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.mode-switch button.active {
+  background: var(--accent);
+  color: #fff;
+}
+.mode-switch button:hover:not(.active) {
+  color: var(--text);
+}
+
+.mode-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 0 0 6px;
+}
+
+.wallet-card .wallet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.wallet-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+.wallet-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+.wallet-address {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+  margin-top: 8px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+.badge.ok {
+  color: var(--ok);
+  border: 1px solid rgba(61, 220, 151, 0.4);
+}
+
+.card.error,
+.status.err {
+  border-color: rgba(255, 107, 129, 0.4);
+}
+.card.ok,
+.status.ok {
+  border-color: rgba(61, 220, 151, 0.4);
+}
+
+.status h2 {
+  font-size: 16px;
+}
+.status .count,
+.count {
+  color: var(--ok);
+  font-family: var(--mono);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.privacy-note {
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+}
+
+.page-footer {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 @media (max-width: 640px) {
   .grid {
     grid-template-columns: 1fr;
