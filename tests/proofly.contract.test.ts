@@ -7,8 +7,9 @@
  *   3. a real Groth16 proof is produced and verified end-to-end from the
  *      compiled artifacts (zkir-v2 + proving params).
  *
- * The private income is injected exclusively through the `income` witness;
- * the threshold is the ONLY public circuit argument.
+ * The private income and applicant id are injected exclusively through their
+ * witnesses; the threshold and application id are the ONLY public circuit
+ * arguments.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -16,13 +17,18 @@ import * as ocrt from '@midnight-ntwrk/compact-runtime';
 import * as zkirV2 from '@midnight-ntwrk/zkir-v2';
 
 import {
+  bytes32,
   callProveIncome,
   CIRCUIT_ID,
   initializeContract,
   KEY_LOCATION,
+  readLedger,
   setUpRuntime,
   type DeployedRuntime,
 } from './helpers.js';
+
+const APP_A = bytes32(0x01);
+const APP_ID_SECRET = bytes32(0xab);
 
 describe('Proofly proveIncome: authorized (passing) case', () => {
   const ctx = {} as DeployedRuntime;
@@ -40,19 +46,18 @@ describe('Proofly proveIncome: authorized (passing) case', () => {
   });
 
   it('accepted income 82500 >= required 50000 produces a result and increments proofCount', async () => {
-    const ledger0 = ctx.contractModule.ledger(deployed.public.contractState.data);
-    expect(ledger0.proofCount).toBe(0n);
+    expect(readLedger(ctx, deployed.public.contractState).proofCount).toBe(0n);
 
-    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n);
+    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n, APP_A, APP_ID_SECRET);
 
     expect(callResult.private.result).toEqual([]);
-    const ledger1 = ctx.contractModule.ledger(callResult.public.contractState);
-    expect(ledger1.proofCount).toBe(1n);
+    expect(readLedger(ctx, callResult.public.contractState).proofCount).toBe(1n);
   });
 
   it('produces and verifies a real Groth16 proof for the honest circuit run', async () => {
     const contract = new ctx.contractModule.Contract({
       income: (x: any) => [x.privateState, 82_500n],
+      applicantId: (x: any) => [x.privateState, APP_ID_SECRET],
     });
     const initial = contract.initialState(
       ocrt.createConstructorContext({}, ctx.encodedCoinPublicKey),
@@ -64,7 +69,7 @@ describe('Proofly proveIncome: authorized (passing) case', () => {
       {},
     );
 
-    const { proofData } = contract.circuits.proveIncome(context, 50_000n);
+    const { proofData } = contract.circuits.proveIncome(context, 50_000n, APP_A);
 
     const preimage = ocrt.proofDataIntoSerializedPreimage(
       proofData.input,
@@ -100,18 +105,22 @@ describe('Proofly proveIncome: rejected (failing) case', () => {
   });
 
   it('rejects income 35000 >= required 50000', async () => {
-    await expect(callProveIncome(ctx, deployed, 35_000n, 50_000n)).rejects.toThrow();
+    await expect(
+      callProveIncome(ctx, deployed, 35_000n, 50_000n, APP_A, APP_ID_SECRET),
+    ).rejects.toThrow();
   });
 
   it('leaves the ledger unchanged after a rejected attempt', async () => {
-    await expect(callProveIncome(ctx, deployed, 35_000n, 50_000n)).rejects.toThrow();
-    const ledgerAfter = ctx.contractModule.ledger(deployed.public.contractState.data);
-    expect(ledgerAfter.proofCount).toBe(0n);
+    await expect(
+      callProveIncome(ctx, deployed, 35_000n, 50_000n, APP_A, APP_ID_SECRET),
+    ).rejects.toThrow();
+    expect(readLedger(ctx, deployed.public.contractState).proofCount).toBe(0n);
   });
 
   it('throws the exact assertion message on direct circuit execution', () => {
     const contract = new ctx.contractModule.Contract({
       income: (x: any) => [x.privateState, 35_000n],
+      applicantId: (x: any) => [x.privateState, APP_ID_SECRET],
     });
     const initial = contract.initialState(
       ocrt.createConstructorContext({}, ctx.encodedCoinPublicKey),
@@ -123,19 +132,21 @@ describe('Proofly proveIncome: rejected (failing) case', () => {
       {},
     );
 
-    expect(() => contract.circuits.proveIncome(context, 50_000n)).toThrow(
+    expect(() => contract.circuits.proveIncome(context, 50_000n, APP_A)).toThrow(
       'Income below required minimum',
     );
   });
 
-  it('exposes exactly the non-secret ledger field (proofCount)', () => {
-    const exposed = ctx.contractModule.ledger(deployed.public.contractState.data);
-    expect(Object.keys(exposed).sort()).toEqual(['proofCount']);
+  it('exposes exactly the non-secret ledger fields (proofCount + usedNullifiers)', () => {
+    expect(Object.keys(readLedger(ctx, deployed.public.contractState.data)).sort()).toEqual([
+      'proofCount',
+      'usedNullifiers',
+    ]);
   });
 });
 
 describe('Proofly proveIncome: circuit & witness surface', () => {
-  it('declares exactly one public circuit argument (the threshold) and one witness (income)', async () => {
+  it('declares exactly two public circuit arguments (threshold, application id) and two witnesses (income, applicant id)', async () => {
     const contractInfo = (
       await import('../contracts/managed/proofly/compiler/contract-info.json', {
         with: { type: 'json' },
@@ -147,10 +158,16 @@ describe('Proofly proveIncome: circuit & witness surface', () => {
 
     const circuit = contractInfo.circuits[0];
     expect(circuit.name).toBe('proveIncome');
-    expect(circuit.arguments).toHaveLength(1);
-    expect(circuit.arguments[0].name).toBe('requiredMonthlyIncome');
+    expect(circuit.arguments).toHaveLength(2);
+    expect(circuit.arguments.map((a: any) => a.name).sort()).toEqual([
+      'applicationId',
+      'requiredMonthlyIncome',
+    ]);
 
-    expect(contractInfo.witnesses).toHaveLength(1);
-    expect(contractInfo.witnesses[0].name).toBe('income');
+    expect(contractInfo.witnesses).toHaveLength(2);
+    expect(contractInfo.witnesses.map((w: any) => w.name).sort()).toEqual([
+      'applicantId',
+      'income',
+    ]);
   });
 });

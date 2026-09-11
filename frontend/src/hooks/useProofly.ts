@@ -1,14 +1,25 @@
 /**
  * Proofly — Live Preprod proof hook.
  *
- * Drives the real `proveIncome(requiredMonthlyIncome)` transaction path and
- * reads the public `proofCount` from the indexer via the generated ledger
- * decoder. No transaction is ever submitted unless `VITE_CONTRACT_ADDRESS` is
- * configured AND `findProoflyContract` resolves to a deployed contract.
+ * Drives the real `proveIncome(requiredMonthlyIncome, applicationId)` transaction
+ * path and reads the public `proofCount` from the indexer via the generated
+ * ledger decoder. No transaction is ever submitted unless `VITE_CONTRACT_ADDRESS`
+ * is configured AND `findProoflyContract` resolves to a deployed contract.
  *
- * The exact monthly income is bound into the witness closure exclusively —
- * it is never logged, never shown in `tx.public`, and never placed anywhere
- * outside the local proof generation.
+ * The exact monthly income AND a fresh per-claim applicant id are bound into the
+ * witness closure exclusively — they are never logged, never shown in
+ * `tx.public`, and never placed anywhere outside the local proof generation.
+ * The `applicationId` is a PUBLIC claim-scoping input supplied by the caller.
+ *
+ * Before the wallet/proving service is contacted, a LOCAL unproven circuit
+ * preflight (`preflightProveIncome`) runs the same circuit against the current
+ * on-chain ledger. Deterministic denials (income below threshold, exact replay
+ * of the same income + applicationId + applicantId) surface as
+ * `Proof denied — <assertion>` and the wallet is never asked to prove them.
+ * Generic preflight failures (indexer/decode) are non-fatal: the real wallet
+ * flow still runs, so wallet/network/prover errors keep their existing
+ * classification. A fresh applicantId per claim means a claim on the same
+ * application remains valid — only an exact triple replay is denied.
  */
 
 import { useCallback, useState } from 'react';
@@ -16,10 +27,12 @@ import { useCallback, useState } from 'react';
 import type { ProoflyProviders } from '../midnight/providers.js';
 import {
   findProoflyContract,
+  preflightProveIncome,
   readProofCountFromLedger,
   type DeployedContract,
 } from '../midnight/contract-service.js';
-import { classifyError } from '../midnight/errors.js';
+import { classifyError, formatDenialMessage } from '../midnight/errors.js';
+import { encodeApplicationId } from '../midnight/application-id.js';
 import { asContractAddress } from '@midnight-ntwrk/midnight-js-types';
 import { CONTRACT_ADDRESS, isContractConfigured } from '../config.js';
 import type { VerificationState } from '../midnight/types.js';
@@ -45,7 +58,15 @@ export function useProofly() {
   }, []);
 
   /**
-   * Prove income >= threshold on Preprod.
+   * Prove income >= threshold for a PUBLIC application on Preprod.
+   *
+   * A fresh `applicantId` (32 bytes, `crypto.getRandomValues`) is generated
+   * per claim and bound into the witness closure — it is in-memory only, never
+   * stored, displayed, or sent anywhere.
+   *
+   * A local unproven-circuit preflight runs first (see module doc); a
+   * deterministic denial short-circuits to `denied` before the wallet is asked
+   * to prove anything.
    *
    * State flow observed:
    *   generating → awaiting-wallet → confirming → granted | denied | error
@@ -56,17 +77,52 @@ export function useProofly() {
    * collapses into `awaiting-wallet` / `confirming`.
    */
   const prove = useCallback(
-    async (providers: ProoflyProviders, income: bigint, threshold: bigint) => {
+    async (
+      providers: ProoflyProviders,
+      income: bigint,
+      threshold: bigint,
+      applicationId: string,
+    ) => {
       setVerification({ state: 'generating' });
       try {
-        // Rebinds the income witness to THIS run's value (Level5 pattern) and
-        // fetches the current public contract state for the proof.
+        // Fresh claim identity for THIS run's proof (never persisted).
+        const applicantId = crypto.getRandomValues(new Uint8Array(32));
+
+        // Local unproven-circuit preflight against the CURRENT on-chain ledger.
+        // Deterministic denials (below-threshold, exact replay of the same
+        // income + applicationId + applicantId) are shown as
+        // `Proof denied — <assertion>` WITHOUT contacting the wallet/prover.
+        // Generic preflight failures (indexer/decode) are non-fatal — the real
+        // wallet flow below stays authoritative for proving/network errors.
+        try {
+          await preflightProveIncome(income, threshold, applicationId, applicantId, providers);
+        } catch (preflightErr) {
+          const verdict = classifyError(preflightErr);
+          if (verdict.state === 'denied') {
+            setVerification({ state: 'denied', message: formatDenialMessage(verdict.message) });
+            return;
+          }
+          console.warn(
+            '[Proofly] Local preflight could not run the circuit; continuing with the wallet proof.',
+            verdict.state === 'error' ? verdict.message : String(preflightErr),
+          );
+        }
+
+        // Rebinds the income + applicant id witnesses to THIS run's values
+        // (Level5 pattern) and fetches the current public contract state.
         setVerification({ state: 'awaiting-wallet' });
-        const deployed: DeployedContract = await findProoflyContract(providers, income);
+        const deployed: DeployedContract = await findProoflyContract(
+          providers,
+          income,
+          applicantId,
+        );
 
         // Generates the proof, requests wallet approval, signs, submits, and
-        // waits for confirmation.
-        const tx: any = await (deployed.callTx.proveIncome as any)(threshold);
+        // waits for confirmation. `applicationId` is a public circuit argument.
+        const tx: any = await (deployed.callTx.proveIncome as any)(
+          threshold,
+          encodeApplicationId(applicationId),
+        );
         setVerification({ state: 'confirming' });
 
         const status = tx?.public?.status;
@@ -86,7 +142,13 @@ export function useProofly() {
             console.warn('[Proofly] Could not decode proofCount from next state:', err);
           }
 
-          setVerification({ state: 'granted', txId, blockHeight, proofCount: count });
+          setVerification({
+            state: 'granted',
+            txId,
+            blockHeight,
+            proofCount: count,
+            applicationId,
+          });
         } else {
           setVerification({
             state: 'denied',

@@ -209,6 +209,25 @@ li code {
   margin: 14px 0 0;
   line-height: 1.5;
 }
+.hint {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.sequence {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.9;
+}
+.sequence .ok {
+  color: var(--text);
+}
+.sequence .err {
+  color: var(--danger);
+}
 
 /* ---- Level 2: mode switch, wallet, status, counter ---- */
 

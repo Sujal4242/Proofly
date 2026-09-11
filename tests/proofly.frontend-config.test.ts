@@ -58,7 +58,7 @@ describe('Proofly Live mode is disabled until a contract address exists', () => 
     // would blow up indirectly; instead it must reject with the clear reason
     // BEFORE any provider is used.
     const providers = { doesNotMatter: true } as any;
-    await expect(findProoflyContract(providers, 1n)).rejects.toThrow(
+    await expect(findProoflyContract(providers, 1n, new Uint8Array(32))).rejects.toThrow(
       LIVE_DISABLED_REASON,
     );
   });

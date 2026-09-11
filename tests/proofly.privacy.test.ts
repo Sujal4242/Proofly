@@ -3,25 +3,33 @@
  *
  * THE core requirement: the exact private income must never be exposed.
  * These tests assert, against the real compiled circuit:
- *   1. the public circuit transcript contains no trace of the income;
+ *   1. the public circuit transcript contains no trace of the income (and no
+ *      trace of the applicant id witness);
  *   2. the PUBLIC INPUT bytes of the proof depend only on public values
- *      (threshold + ledger) — two runs with different private incomes and the
- *      same threshold produce byte-identical public input, proving the income
- *      cannot be reconstructed from anything public;
+ *      (threshold + ledger + application id) — two runs with different private
+ *      incomes and the same threshold produce byte-identical public input,
+ *      proving the income cannot be reconstructed from anything public;
  *   3. the threshold — the public argument — DOES flow into the public input
- *      (so the test is sensitive);
- *   4. the on-chain public ledger exposes only the non-secret counter.
+ *      (so the test is sensitive); the application id does too;
+ *   4. the on-chain public ledger exposes only the two non-secret fields.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import * as ocrt from '@midnight-ntwrk/compact-runtime';
 
 import {
+  bytes32,
   callProveIncome,
   initializeContract,
+  readLedger,
   setUpRuntime,
+  toHex,
   type DeployedRuntime,
 } from './helpers.js';
+
+const APP_A = bytes32(0x01);
+const APP_ID_SECRET = bytes32(0xab);
+const APP_ID_SECRET_HEX = toHex(APP_ID_SECRET);
 
 describe('Proofly privacy: the exact income stays private', () => {
   const ctx = {} as DeployedRuntime;
@@ -38,9 +46,10 @@ describe('Proofly privacy: the exact income stays private', () => {
     }
   });
 
-  function runProgram(income: bigint, threshold: bigint) {
+  function runProgram(income: bigint, threshold: bigint, applicationId: Uint8Array = APP_A) {
     const contract = new ctx.contractModule.Contract({
       income: (x: any) => [x.privateState, income],
+      applicantId: (x: any) => [x.privateState, APP_ID_SECRET],
     });
     const initial = contract.initialState(
       ocrt.createConstructorContext({}, ctx.encodedCoinPublicKey),
@@ -51,7 +60,7 @@ describe('Proofly privacy: the exact income stays private', () => {
       initial.currentContractState.data,
       {},
     );
-    return contract.circuits.proveIncome(context, threshold).proofData;
+    return contract.circuits.proveIncome(context, threshold, applicationId).proofData;
   }
 
   /** BigInt-safe JSON serialization so transcript values are actually compared. */
@@ -61,20 +70,20 @@ describe('Proofly privacy: the exact income stays private', () => {
     );
   }
 
-  it('keeps the income out of the public circuit transcript', async () => {
-    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n);
+  it('keeps the income and the applicant id out of the public circuit transcript', async () => {
+    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n, APP_A, APP_ID_SECRET);
 
-    const publicTranscriptJson = safeJson(callResult.public.publicTranscript);
-    expect(publicTranscriptJson).not.toContain('82500');
-
-    const partitionedJson = safeJson(callResult.public.partitionedTranscript);
-    expect(partitionedJson).not.toContain('82500');
+    for (const field of ['publicTranscript', 'partitionedTranscript']) {
+      const json = safeJson((callResult.public as Record<string, unknown>)[field]);
+      expect(json).not.toContain('82500');
+      expect(json).not.toContain(APP_ID_SECRET_HEX);
+    }
 
     // The circuit produces no public outputs at all.
     expect(callResult.private.result).toEqual([]);
   });
 
-  it('produces byte-identical PUBLIC inputs for different private incomes at the same threshold', () => {
+  it('produces byte-identical PUBLIC inputs for different private incomes at the same threshold/application', () => {
     const lowIncome = runProgram(80_000n, 50_000n);
     const highIncome = runProgram(82_500n, 50_000n);
 
@@ -82,16 +91,22 @@ describe('Proofly privacy: the exact income stays private', () => {
     expect(lowIncome.input).toEqual(highIncome.input);
   });
 
-  it('the threshold — the public argument — DOES flow into the public input (sensitivity)', () => {
+  it('the threshold and the application id — the public arguments — DO flow into the public input (sensitivity)', () => {
     const threshold40 = runProgram(82_500n, 40_000n);
     const threshold50 = runProgram(82_500n, 50_000n);
 
     // If the public-input check above were blind, this would also be blind.
     expect(threshold40.input).not.toEqual(threshold50.input);
+
+    const appA = runProgram(82_500n, 50_000n, bytes32(0x01));
+    const appB = runProgram(82_500n, 50_000n, bytes32(0x02));
+    expect(appA.input).not.toEqual(appB.input);
   });
 
-  it('exposes only the non-secret proofCount ledger field on-chain', () => {
-    const exposed = ctx.contractModule.ledger(deployed.public.contractState.data);
-    expect(Object.keys(exposed).sort()).toEqual(['proofCount']);
+  it('exposes only the non-secret proofCount + usedNullifiers ledger fields on-chain', () => {
+    expect(Object.keys(readLedger(ctx, deployed.public.contractState.data)).sort()).toEqual([
+      'proofCount',
+      'usedNullifiers',
+    ]);
   });
 });

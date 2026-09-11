@@ -66,14 +66,19 @@ export function ProofStatus({ state, connection }: Props) {
             </dd>
             <dt>Block height</dt>
             <dd>{state.blockHeight}</dd>
+            <dt>Application ID</dt>
+            <dd>
+              <code>{state.applicationId}</code>
+            </dd>
             <dt>Public proofCount</dt>
             <dd>
               <code>{state.proofCount}</code>
             </dd>
           </dl>
           <p className="note">
-            The verifier only learns that <strong>income ≥ threshold</strong> —
-            never the income itself.
+            The verifier only learns that <strong>income ≥ threshold</strong> for
+            the claimed application — never the income itself and never the
+            claim identity.
           </p>
         </div>
       );

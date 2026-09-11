@@ -1,5 +1,10 @@
 /**
- * Proofly — ONE-TIME deployment script for the Midnight Preprod network.
+ * Proofly — deployment script for the Midnight Preprod network.
+ *
+ * Used for the L2 deployment and, after the Level 3 contract surface change, a
+ * SECOND deployment of the same project. Each successful deployment APPENDS a
+ * clearly separated level entry to docs/evidence/DEPLOYMENT.md while preserving
+ * the previous (L2) entry — no identifier is ever fabricated.
  *
  * This script is NOT part of the deployed application. It is an OPERATOR-ONLY,
  * LOCAL-ONLY tool that deploys the compiled Proofly contract to Midnight
@@ -407,22 +412,24 @@ function createProviders(walletCtx: WalletContext, cfg: ReturnType<typeof networ
   };
 }
 
-// ─── Compiled Contract (income witness wired exactly as the frontend) ──────────
+// ─── Compiled Contract (income + applicant id witnesses wired as the frontend) ─
 // Deployment only initializes the ledger (proofCount = 0); proveIncome is never
-// invoked here, so the placeholder income is never used. Built lazily so the
-// validate/preflight path never touches the compiled artifacts.
+// invoked here, so the placeholder income and zero claimant id are never used.
+// Built lazily so the validate/preflight path never touches the compiled artifacts.
 const CC: any = CompiledContract;
 
 async function buildCompiledContract() {
   const Proofly = await import(pathToFileURL(contractPath).href);
   return CC.make(CONTRACT_NAME, Proofly.Contract).pipe(
-    CC.withWitnesses(createProoflyWitnesses<{}>(0n)),
+    CC.withWitnesses(createProoflyWitnesses<{}>(0n, new Uint8Array(32))),
     CC.withCompiledFileAssets(zkConfigPath),
   );
 }
 
 // ─── Evidence (NON-SECRET ONLY) ────────────────────────────────────────────────
 interface DeploymentEvidence {
+  /** Level tag; appended as a section header in the evidence file. */
+  level: 'L2' | 'L3';
   contractAddress: string;
   txId: string;
   blockHeight?: string | number;
@@ -432,28 +439,48 @@ interface DeploymentEvidence {
   compilerVersion: string;
   runtimeVersion: string;
   deployerAddress: string;
+  /** Extra markdown lines appended after the standard table. */
+  additionalMarkdown?: string[];
 }
 
+/**
+ * Append a clearly separated level entry to the evidence file.
+ *
+ * If the file already contains L2 evidence, the new entry is appended after a
+ * horizontal rule separator — the existing content is never removed or modified.
+ */
 function writeEvidence(evidence: DeploymentEvidence): void {
   fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
-  const lines = [
-    '# Proofly — Preprod Deployment Evidence',
+
+  // Preserve any existing evidence (e.g., the L2 deployment record).
+  let existingContent = '';
+  if (fs.existsSync(evidencePath)) {
+    existingContent = fs.readFileSync(evidencePath, 'utf-8').trimEnd();
+  }
+
+  const separator = existingContent ? '\n\n---\n\n' : '';
+  const levelLabel = evidence.level;
+
+  const sectionLines = [
+    `## Level ${levelLabel} Deployment — Proofly ${levelLabel === 'L3' ? 'with Replay Protection' : 'private proof-of-income'}`,
     '',
-    '> Non-secret deployment record. It NEVER contains seeds, private keys,',
-    '> wallet secrets, private state, or income values.',
+    `| Item | Value |`,
+    `|---|---|`,
+    `| **Network** | Midnight ${evidence.network.toUpperCase()} (testnet; no real funds) |`,
+    `| **Contract address** | \`${evidence.contractAddress}\` |`,
+    `| **Transaction ID** | \`${evidence.txId}\` |`,
+    `| **Block height** | ${evidence.blockHeight ?? 'n/a'} |`,
+    `| **Block hash** | \`${evidence.blockHash ?? 'n/a'}\` |`,
+    `| **Compact compiler** | ${evidence.compilerVersion} |`,
+    `| **Compact runtime** | ${evidence.runtimeVersion} |`,
+    `| **Deployed at** | ${evidence.deployedAt} |`,
+    `| **Deployer address (public)** | \`${evidence.deployerAddress}\` |`,
     '',
-    `- Network: ${evidence.network}`,
-    `- Contract address: ${evidence.contractAddress}`,
-    `- Transaction ID: ${evidence.txId}`,
-    `- Block height: ${evidence.blockHeight ?? 'n/a'}`,
-    `- Block hash: ${evidence.blockHash ?? 'n/a'}`,
-    `- Deployment timestamp: ${evidence.deployedAt}`,
-    `- Compiler version: ${evidence.compilerVersion}`,
-    `- Runtime version: ${evidence.runtimeVersion}`,
-    `- Deployer address (public): ${evidence.deployerAddress}`,
-    '',
+    ...(evidence.additionalMarkdown ?? []),
   ];
-  fs.writeFileSync(evidencePath, lines.join('\n'));
+
+  const output = existingContent + separator + sectionLines.join('\n') + '\n';
+  fs.writeFileSync(evidencePath, output);
   process.stdout.write(`  ✓ Non-secret evidence written to ${path.relative(REPO_ROOT, evidencePath)}\n`);
 }
 
@@ -641,7 +668,7 @@ async function main(): Promise<void> {
   }
 
   console.log('\n╔══════════════════════════════════════════════════════════════╗');
-  console.log('║  Proofly — ONE-TIME Deployment to Midnight Preprod          ║');
+  console.log('║  Proofly — L2/L3 Deployment to Midnight Preprod             ║');
   console.log('╚══════════════════════════════════════════════════════════════╝\n');
 
   // Preflight gate — abort before any wallet or network activity.
@@ -790,7 +817,7 @@ async function main(): Promise<void> {
 
   console.log('\n  ── Confirm Deployment ──────────────────────────────────────');
   console.log(`  Network : MIDNIGHT ${ALLOWED_NETWORK_ID.toUpperCase()} (testnet)`);
-  console.log('  Contract: Proofly (proofCount ledger, proofIncome circuit)');
+  console.log('  Contract: Proofly Level 3 (proofCount + usedNullifiers, proveIncome circuit)');
   console.log('');
   process.stdout.write('  Type DEPLOY to confirm: ');
   const confirmed = await new Promise<boolean>((resolve) => {
@@ -879,7 +906,39 @@ async function main(): Promise<void> {
     // keep n/a
   }
 
+  // L3 contract surface + privacy summary (non-secret, filled only from the
+  // actual deployment identifiers above — never fabricated).
+  const l3EvidenceExtra = [
+    '### Contract Surface (Level 3)',
+    '',
+    '- Circuit: `proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>)`',
+    '- Ledger: `proofCount: Field`, `usedNullifiers: Map<Bytes<32>, Boolean>`',
+    '- Private witnesses: `income(): Uint<32>`, `applicantId(): Bytes<32>`',
+    '',
+    '### Privacy & Replay Protection',
+    '',
+    '- Income is a private witness; only `requiredMonthlyIncome` and `applicationId`',
+    '  are public circuit arguments. Exact income is never on-chain.',
+    '- One deterministic, income-independent nullifier per claim:',
+    '  `persistentHash(["proofly:claim:", applicationId, requiredMonthlyIncome, applicantId])`.',
+    '- Replay of the same `(applicationId, requiredMonthlyIncome, applicantId)` triple',
+    '  is rejected in-circuit with "Claim already used for this application".',
+    '- Cross-application claims are independent: each `applicationId` has its own',
+    '  nullifier scope, so different applications never block each other.',
+    '- `applicantId` is generated fresh per claim in the browser',
+    '  (`crypto.getRandomValues`); it is never stored, logged, or sent outside',
+    '  the local prover. It is not an identity system.',
+    '',
+    '### Security / Secrets',
+    '',
+    'The deployer seed and all private credentials are intentionally NOT',
+    'included. Reuses the existing dedicated L2 deployer wallet (same seed); no',
+    'new credentials were generated for this deployment.',
+    '',
+  ];
+
   writeEvidence({
+    level: 'L3',
     contractAddress,
     txId,
     blockHeight,
@@ -889,6 +948,7 @@ async function main(): Promise<void> {
     compilerVersion,
     runtimeVersion,
     deployerAddress: address.toString(),
+    additionalMarkdown: l3EvidenceExtra,
   });
 
   console.log('  ── Deployment Result ────────────────────────────────────────\n');

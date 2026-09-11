@@ -40,10 +40,10 @@ export default function App() {
     verification.state === 'submitting' ||
     verification.state === 'confirming';
 
-  const handleProve = async (income: bigint, threshold: bigint) => {
+  const handleProve = async (income: bigint, threshold: bigint, applicationId: string) => {
     if (!providers) return;
     reset();
-    await prove(providers, income, threshold);
+    await prove(providers, income, threshold, applicationId);
     if (verification.state === 'granted') {
       void refreshProofCount(providers);
     }

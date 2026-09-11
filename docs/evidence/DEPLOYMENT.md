@@ -83,3 +83,46 @@ variable during the one-time deployment, was never printed or written to disk
 by the deployment tool, and is retained only in the operator's local
 environment. Wallet sync state and local environment files are excluded from
 Git. This document contains only public, on-chain identifiers.
+
+---
+
+## Level L3 Deployment — Proofly with Replay Protection
+
+| Item | Value |
+|---|---|
+| **Network** | Midnight PREPROD (testnet; no real funds) |
+| **Contract address** | `bc9c4a53aac2d1c67d17456083d646fc302e32935acd351ad45b82c9d511dc2a` |
+| **Transaction ID** | `00b4235289d5e49ae8465f3291cb2d72804b1848659bfb8849679bf496f47c5b91` |
+| **Block height** | 2502772 |
+| **Block hash** | `0539158299dc2883886faf1a9f1d5d117fdce552f0029d022c786ada7f4673c7` |
+| **Compact compiler** | 0.31.1 |
+| **Compact runtime** | 0.16.0 |
+| **Deployed at** | 2026-09-11T12:21:22.964Z |
+| **Deployer address (public)** | `mn_addr_preprod1ehqqv3n8zwxrw9mde9snfa327jemnkf9pw425cdhx9jjdhzw98ws2vlzr6` |
+
+### Contract Surface (Level 3)
+
+- Circuit: `proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>)`
+- Ledger: `proofCount: Field`, `usedNullifiers: Map<Bytes<32>, Boolean>`
+- Private witnesses: `income(): Uint<32>`, `applicantId(): Bytes<32>`
+
+### Privacy & Replay Protection
+
+- Income is a private witness; only `requiredMonthlyIncome` and `applicationId`
+  are public circuit arguments. Exact income is never on-chain.
+- One deterministic, income-independent nullifier per claim:
+  `persistentHash(["proofly:claim:", applicationId, requiredMonthlyIncome, applicantId])`.
+- Replay of the same `(applicationId, requiredMonthlyIncome, applicantId)` triple
+  is rejected in-circuit with "Claim already used for this application".
+- Cross-application claims are independent: each `applicationId` has its own
+  nullifier scope, so different applications never block each other.
+- `applicantId` is generated fresh per claim in the browser
+  (`crypto.getRandomValues`); it is never stored, logged, or sent outside
+  the local prover. It is not an identity system.
+
+### Security / Secrets
+
+The deployer seed and all private credentials are intentionally NOT
+included. Reuses the existing dedicated L2 deployer wallet (same seed); no
+new credentials were generated for this deployment.
+

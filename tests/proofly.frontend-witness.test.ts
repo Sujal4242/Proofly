@@ -1,25 +1,30 @@
 /**
- * Proofly — L2 witness wiring tests.
+ * Proofly — contract witness wiring tests.
  *
  * Verifies, against the REAL compiled contract artifact (the identical bytes
  * copied to the frontend by copy-zk-assets), that:
- *   1. the exact income is bound through the `income` WITNESS closure and
- *      never passed as a circuit argument;
+ *   1. the exact income and the applicant id are bound through their WITNESS
+ *      closures (`income`, `applicantId`) via the LIVE `frontend/src/midnight/witnesses.ts`
+ *      `createProoflyWitnesses` — and never passed as circuit arguments — only
+ *      the threshold and application id are;
  *   2. a sub-threshold run surfaces the exact circuit assertion
- *      ("Income below required minimum") → the `denied` classification.
+ *      ("Income below required minimum") → the `denied` classification;
+ *   3. the applicant id secret is absent from the public transcript.
  *
- * These run completely offline — no wallet, no Preprod, no transactions. They
- * are NOT fake "a wallet transaction happened" tests. They import the managed
- * artifact (same `compact-runtime` instance as the rest of the suite) rather
- * than the frontend copy solely to avoid dual bundled-runtime copies.
+ * These run completely offline — no wallet, no Preprod, no transactions. The
+ * managed artifact is imported (same `compact-runtime` instance as the rest of
+ * the suite) rather than a frontend copy to avoid dual bundled-runtime copies.
  */
 import { describe, expect, it } from 'vitest';
 
 import * as ocrt from '@midnight-ntwrk/compact-runtime';
 import { Contract, ledger } from '../contracts/managed/proofly/contract/index.js';
-import { createProoflyWitnesses } from '../frontend/src/midnight/witnesses.js';
 import { classifyError, INCOME_DENIED_MESSAGE } from '../frontend/src/midnight/errors.js';
+import { createProoflyWitnesses } from '../frontend/src/midnight/witnesses.js';
 import { DEMO_COIN_PUBLIC_KEY_HEX } from '../frontend/src/proofly/demo-keys.js';
+
+const APP_A = new Uint8Array(32).fill(0x01);
+const APP_ID_SECRET = new Uint8Array(32).fill(0xab);
 
 const encodedCoinPublicKey: ocrt.EncodedCoinPublicKey = {
   bytes: hexToBytes(DEMO_COIN_PUBLIC_KEY_HEX),
@@ -33,43 +38,36 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
-describe('Proofly witness wiring (frontend compiled contract)', () => {
-  it('binds the exact income through the income witness, not a circuit argument', () => {
-    const witnesses = createProoflyWitnesses<{}>(82_500n);
-    expect(Object.keys(witnesses)).toEqual(['income']);
+function makeContext(contract: Contract<any>) {
+  const initial = contract.initialState(
+    ocrt.createConstructorContext({}, encodedCoinPublicKey),
+  );
+  return ocrt.createCircuitContext(
+    ocrt.dummyContractAddress(),
+    encodedCoinPublicKey,
+    initial.currentContractState.data,
+    {},
+  );
+}
 
-    const contract = new Contract(witnesses);
-    const initial = contract.initialState(
-      ocrt.createConstructorContext({}, encodedCoinPublicKey),
-    );
-    const context = ocrt.createCircuitContext(
-      ocrt.dummyContractAddress(),
-      encodedCoinPublicKey,
-      initial.currentContractState.data,
-      {},
-    );
+describe('Proofly contract witness wiring (Level 1 + Level 3 surface)', () => {
+  it('binds the income and applicant id through witnesses; only threshold + application id are arguments', () => {
+    const contract = new Contract(createProoflyWitnesses(82_500n, APP_ID_SECRET));
+    const context = makeContext(contract);
 
-    const res = contract.circuits.proveIncome(context, 50_000n);
-    // The circuit runs: a proofData payload is produced and the public ledger
-    // counter increments (read from the NEW query context the circuit returns).
-    // Income stays a private witness, never a public argument.
+    const res = contract.circuits.proveIncome(context, 50_000n, APP_A);
+    // The circuit runs: a proofData payload is produced and the public counter
+    // increments (read from the NEW query context the circuit returns). Both
+    // secrets stay private witnesses.
     expect(res.proofData).toBeTruthy();
     expect(ledger(res.context.currentQueryContext.state).proofCount).toBe(1n);
   });
 
   it('surfaces the exact circuit assertion when income < threshold (sub-threshold → denied)', () => {
-    const contract = new Contract(createProoflyWitnesses<{}>(35_000n));
-    const initial = contract.initialState(
-      ocrt.createConstructorContext({}, encodedCoinPublicKey),
-    );
-    const context = ocrt.createCircuitContext(
-      ocrt.dummyContractAddress(),
-      encodedCoinPublicKey,
-      initial.currentContractState.data,
-      {},
-    );
+    const contract = new Contract(createProoflyWitnesses(35_000n, APP_ID_SECRET));
+    const context = makeContext(contract);
 
-    expect(() => contract.circuits.proveIncome(context, 50_000n)).toThrow(
+    expect(() => contract.circuits.proveIncome(context, 50_000n, APP_A)).toThrow(
       INCOME_DENIED_MESSAGE,
     );
 
@@ -81,19 +79,14 @@ describe('Proofly witness wiring (frontend compiled contract)', () => {
   });
 
   it('keeps the income out of the public transcript even when accepted', () => {
-    const contract = new Contract(createProoflyWitnesses<{}>(82_500n));
-    const initial = contract.initialState(
-      ocrt.createConstructorContext({}, encodedCoinPublicKey),
-    );
-    const context = ocrt.createCircuitContext(
-      ocrt.dummyContractAddress(),
-      encodedCoinPublicKey,
-      initial.currentContractState.data,
-      {},
-    );
+    const contract = new Contract(createProoflyWitnesses(82_500n, APP_ID_SECRET));
+    const context = makeContext(contract);
 
-    const { proofData } = contract.circuits.proveIncome(context, 50_000n);
+    const { proofData } = contract.circuits.proveIncome(context, 50_000n, APP_A);
     const transcript = JSON.stringify(proofData.publicTranscript);
     expect(transcript).not.toContain('82500');
+    // The application id is a witness-derived secret; only its hash (the
+    // nullifier) ever appears publicly — never the raw 32 bytes.
+    expect(transcript).not.toContain('ab'.repeat(32));
   });
 });

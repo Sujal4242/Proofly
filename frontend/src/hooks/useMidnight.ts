@@ -77,9 +77,9 @@ export function useMidnight() {
       // Step 3: Find the deployed contract only if an address is configured.
       let deployed: DeployedContract | null = null;
       if (isContractConfigured()) {
-        // Placeholder witness — witnesses only matter at proof time; each
-        // proof re-binds the real income (see useProofly/prove).
-        deployed = await findProoflyContract(p, 0n);
+        // Placeholder witnesses — only matter at proof time; each proof
+        // re-binds the real income + fresh claim identity (see useProofly/prove).
+        deployed = await findProoflyContract(p, 0n, new Uint8Array(32));
       }
 
       return { connectedAPI, providers: p, deployed, walletAddress };

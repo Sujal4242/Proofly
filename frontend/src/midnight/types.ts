@@ -25,6 +25,7 @@ export type VerificationState =
       txId: string;
       blockHeight: number;
       proofCount: number;
+      applicationId: string;
     }
   | { state: 'denied'; message: string }
   | { state: 'error'; message: string };

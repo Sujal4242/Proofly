@@ -11,6 +11,7 @@ import {
   classifyError,
   extractAssertion,
   INCOME_DENIED_MESSAGE,
+  REPLAY_DENIED_MESSAGE,
 } from '../frontend/src/midnight/errors.js';
 
 describe('Proofly error classification', () => {
@@ -19,9 +20,18 @@ describe('Proofly error classification', () => {
     expect(state.state).toBe('denied');
   });
 
+  it('classifies the Level 3 replay assertion as denied', () => {
+    const state = classifyError('failed assert: Claim already used for this application');
+    expect(state.state).toBe('denied');
+    expect(state.state === 'denied' && state.message).toBe(REPLAY_DENIED_MESSAGE);
+  });
+
   it('extracts the canonical denial message from native/wasm messages', () => {
     expect(extractAssertion('wasm: Income below required minimum at line 26')).toBe(
       INCOME_DENIED_MESSAGE,
+    );
+    expect(extractAssertion('wasm: Claim already used for this application at line 31')).toBe(
+      REPLAY_DENIED_MESSAGE,
     );
     expect(extractAssertion('something unrelated')).toBe('something unrelated');
   });
@@ -40,5 +50,39 @@ describe('Proofly error classification', () => {
     expect(network.state).toBe('error');
     expect(timeout.state).toBe('error');
     expect(cancel.state).toBe('error');
+  });
+
+  it('never classifies a generic wallet/prover "Request failed" as a denial', () => {
+    const basic = new Error("Error: 'check' returned an error: Error: Request failed");
+    const nested = new Error(
+      "Unexpected error submitting scoped transaction '<unnamed>': 'check' returned an error: Request failed",
+      { cause: basic },
+    );
+    expect(classifyError(basic).state).toBe('error');
+    expect(classifyError(nested).state).toBe('error');
+  });
+
+  it('recovers a denial hint buried under scoped-transaction/wallet wrappers', () => {
+    const inner = new Error(`failed assert: ${REPLAY_DENIED_MESSAGE}`);
+    const mid = new Error("'check' returned an error: Error: Request failed", { cause: inner });
+    const outer = new Error(
+      "Unexpected error submitting scoped transaction '<unnamed>': 'check' returned an error: Error: Request failed",
+      { cause: mid },
+    );
+    expect(classifyError(outer)).toEqual({
+      state: 'denied',
+      message: REPLAY_DENIED_MESSAGE,
+    });
+  });
+
+  it('classifies the above-threshold assertion result via the cause chain too', () => {
+    const wrapped = new Error(
+      "Error: 'check' returned an error: Error: Request failed",
+      { cause: new Error(`wasm: ${INCOME_DENIED_MESSAGE} at line 26`) },
+    );
+    expect(classifyError(wrapped)).toEqual({
+      state: 'denied',
+      message: INCOME_DENIED_MESSAGE,
+    });
   });
 });

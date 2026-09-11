@@ -53,6 +53,11 @@ export function random32(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
 }
 
+/** Deterministic 32-byte fill value (test-only; NOT a secret). */
+export function bytes32(fill: number): Uint8Array {
+  return new Uint8Array(32).fill(fill);
+}
+
 export function toHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('hex');
 }
@@ -89,22 +94,31 @@ export function makeKeyMaterialProvider(): zkirV2.KeyMaterialProvider {
 }
 
 /**
- * Build the compiled contract with the given private income wired through the
- * `income` WITNESS — the income is never a circuit argument.
+ * Build the compiled contract with the given private income and applicant id
+ * wired through their WITNESSES — neither is ever a circuit argument.
  */
-export function makeCompiledContract(income: bigint, Contract: typeof ProoflyContract.Contract) {
+export function makeCompiledContract(
+  income: bigint,
+  applicantId: Uint8Array,
+  Contract: typeof ProoflyContract.Contract,
+) {
   const compiled = CompactJS.CompiledContract.make('proofly', Contract).pipe(
     CompactJS.CompiledContract.withWitnesses({
       income: (ctx: any) => [ctx.privateState, income],
+      applicantId: (ctx: any) => [ctx.privateState, applicantId],
     } as any),
     CompactJS.CompiledContract.withCompiledFileAssets(ASSETS_DIR),
   );
   return compiled as any;
 }
 
-/** Contract executable bound to a specific private income (witness). */
-export function makeExecutable(income: bigint, Contract: typeof ProoflyContract.Contract) {
-  return CompactJS.ContractExecutable.make(makeCompiledContract(income, Contract));
+/** Contract executable bound to a specific private income + applicant id (witnesses). */
+export function makeExecutable(
+  income: bigint,
+  applicantId: Uint8Array,
+  Contract: typeof ProoflyContract.Contract,
+) {
+  return CompactJS.ContractExecutable.make(makeCompiledContract(income, applicantId, Contract));
 }
 
 export interface DeployedRuntime {
@@ -141,7 +155,7 @@ export async function setUpRuntime(): Promise<DeployedRuntime> {
 export async function initializeContract(
   ctx: DeployedRuntime,
 ): Promise<Awaited<ReturnType<ContractExecutable<any, any, any, any>['initialize']>>> {
-  const executable = makeExecutable(1n, ctx.contractModule.Contract);
+  const executable = makeExecutable(1n, bytes32(0x11), ctx.contractModule.Contract);
   return ctx.runtime.runPromise(executable.initialize({}));
 }
 
@@ -151,8 +165,10 @@ export async function callProveIncome(
   deployResult: any,
   income: bigint,
   requiredMonthlyIncome: bigint,
+  applicationId: Uint8Array,
+  applicantId: Uint8Array,
 ) {
-  const executable = makeExecutable(income, ctx.contractModule.Contract);
+  const executable = makeExecutable(income, applicantId, ctx.contractModule.Contract);
   return ctx.runtime.runPromise(
     executable.circuit(
       CIRCUIT_ID,
@@ -163,6 +179,17 @@ export async function callProveIncome(
         zswapLocalState: deployResult.private.zswapLocalState,
       },
       requiredMonthlyIncome,
+      applicationId,
     ),
   );
+}
+
+/** Decode the public ledger from a (charged) contract state. */
+export function readLedger(ctx: DeployedRuntime, state: any) {
+  return ctx.contractModule.ledger(state?.data ?? state);
+}
+
+/** Extract the recorded nullifier keys from a ledger state (0 or 1 entries per map). */
+export function readNullifiers(ctx: DeployedRuntime, state: any): Uint8Array[] {
+  return Array.from(readLedger(ctx, state).usedNullifiers).map(([key]) => key as Uint8Array);
 }
