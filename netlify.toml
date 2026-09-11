@@ -1,0 +1,36 @@
+# Proofly — Netlify static hosting configuration.
+#
+# Builds and publishes the static React/Vite frontend only.
+# This file never contains secrets: no PROOFLY_DEPLOYER_SEED, no private keys,
+# no mnemonics. All environment variables below are public network configuration.
+#
+# The build installs the pinned Compact devtools (0.5.1) and compiler/toolchain
+# (0.31.1), compiles the Compact contract, then runs the existing
+# `npm run build:frontend` pipeline — exactly matching the CI workflow.
+
+[build]
+  base = "."
+  publish = "frontend/dist"
+  # Each line is a sequential bash command. Netlify runs this script with
+  # set -e, so any failure aborts the build. The compact --version and
+  # compact compile --version lines verify the correct toolchain is installed.
+  command = """
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+export PATH="$HOME/.local/bin:$HOME/.compact/bin:$PATH"
+compact --version
+compact update 0.31.1
+compact compile --version
+npm ci
+npm --prefix frontend ci
+npm run compile
+npm run build:frontend
+"""
+
+[build.environment]
+  NODE_VERSION = "22"
+  # PUBLIC network configuration — identical to frontend/.env.example values.
+  # No secrets, no deployer seeds, no private credentials.
+  VITE_NETWORK_ID = "preprod"
+  VITE_CONTRACT_ADDRESS = "bc9c4a53aac2d1c67d17456083d646fc302e32935acd351ad45b82c9d511dc2a"
+  VITE_INDEXER_URL = "https://indexer.preprod.midnight.network/api/v4/graphql"
+  VITE_INDEXER_WS_URL = "wss://indexer.preprod.midnight.network/api/v4/graphql/ws"
