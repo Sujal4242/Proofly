@@ -3,9 +3,11 @@
 **Project:** Proofly — Private Proof-of-Income
 
 **Purpose:** Prove that a private monthly income meets or exceeds a public
-required threshold **without revealing the exact income**. The only public
-circuit argument is `requiredMonthlyIncome`; the exact monthly income flows
-exclusively through the private `income` witness.
+required threshold **without revealing the exact income**. The current Level 3
+circuit operates on two public inputs — `requiredMonthlyIncome` (the required
+threshold) and `applicationId` (the public claim-scoping input that drives
+replay protection); the exact monthly income flows exclusively through the
+private `income` witness.
 
 > Non-secret deployment record. It intentionally contains **no** deployer seed,
 > wallet private keys, local environment variables containing secrets, private
@@ -34,10 +36,11 @@ exclusively through the private `income` witness.
 
 The exact monthly income is **not** stored in public ledger state. The
 `proofCount` ledger holds only a non-secret incrementing counter, and the
-`requiredMonthlyIncome` threshold is the only public circuit argument. The
-income is bound in the prover's browser through the Compact witness closure and
-never enters ledger state, logs, URLs, storage, or any custom backend. The app
-UI never re-displays the income after a live proof submission.
+public circuit inputs are `requiredMonthlyIncome` together with the
+claim-scoping `applicationId` (Level 3). The income is bound in the prover's
+browser through the Compact witness closure and never enters ledger state,
+logs, URLs, storage, or any custom backend. The app UI never re-displays the
+income after a live proof submission.
 
 ## Deployment process summary
 
@@ -57,8 +60,8 @@ deployer wallet** (separate from any personal Lace wallet), using the local
    proof-server container (`midnightntwrk/proof-server:8.1.0`).
 
 The deployment script is **not** part of the deployed application; the Netlify
-app is a static frontend that interacts with this contract through the Lace
-wallet.
+static-hosting architecture serves a static frontend that interacts with this
+contract through the Lace wallet.
 
 ## Verification
 

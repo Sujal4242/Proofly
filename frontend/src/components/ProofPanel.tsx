@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { isValidApplicationId } from '../midnight/application-id.js';
 
 interface Props {
@@ -27,6 +27,21 @@ export function ProofPanel({ disabled, disabledReason, busy, onProve }: Props) {
   const [incomeInput, setIncomeInput] = useState('82500');
   const [thresholdInput, setThresholdInput] = useState('50000');
   const [applicationId, setApplicationId] = useState('loan-app-2026-01');
+  const prevBusy = useRef(false);
+
+  // Once a Live proving run has fully completed (granted, denied, or error)
+  // the exact income must no longer be visible in the panel. The value is only
+  // cleared on the `busy` true → false transition — i.e. after the attempt
+  // finishes — and was already read at submit time. UI-only change: nothing is
+  // persisted, logged, or transmitted differently, and proving is unaffected.
+  // (This deliberately clears on any finished attempt, not just `granted`,
+  // because ProofPanel cannot observe the verdict without a new prop.)
+  useEffect(() => {
+    if (prevBusy.current && !busy) {
+      setIncomeInput('');
+    }
+    prevBusy.current = busy;
+  }, [busy]);
 
   const applicationIdValid = isValidApplicationId(applicationId);
 

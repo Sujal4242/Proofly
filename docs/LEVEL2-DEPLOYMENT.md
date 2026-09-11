@@ -2,8 +2,9 @@
 
 This guide describes the **one-time, operator-only** deployment of the deployed
 Proofly contract to the **Midnight Preprod testnet**. It is separate from the
-application model: the deployed Netlify app is a **static frontend** that talks
-to the deployed contract via Lace. The deployer process below runs on a **local
+application model: the Netlify static-hosting architecture serves a **static
+frontend** that talks to the deployed contract via Lace. The deployer process
+below runs on a **local
 machine**, is never part of the Netlify build, and uses **testnet resources
 only — no real money.**
 

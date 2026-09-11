@@ -2,7 +2,7 @@
   "name": "proofly",
   "version": "0.1.0",
   "type": "module",
-  "description": "Proofly — private proof-of-income ZK dApp on the Midnight Network. Level 1: minimal privacy-preserving income threshold circuit.",
+  "description": "Proofly — private proof-of-income ZK dApp on the Midnight Network (Level 3) with per-application replay protection: prove that monthly income meets a required threshold without revealing the income.",
   "license": "MIT",
   "engines": {
     "node": ">=22.0.0"

@@ -40,9 +40,12 @@ Verified across `frontend/src`:
   applicant id are in-memory React state only.
 - **No console leaks**: no `console.log` / `info` / `debug`; only `warn`/`error`
   for operational diagnostics that never include income or `applicantId`.
-- **No raw network**: no direct `fetch`, `XMLHttpRequest`, or `WebSocket` in
-  `frontend/src`. All network traffic goes through the midnight-js providers to
-  Lace and the public Midnight Preprod indexer.
+- **No custom application network**: no `XMLHttpRequest`, raw `WebSocket`, or
+  `fetch` to any custom/third-party backend or API. The one direct fetch is
+  `FetchZkConfigProvider`, which loads Proofly's own compiled ZK assets
+  (zkir / keys) from the application's own static origin (`ZK_ASSETS_BASE`);
+  all other network traffic goes through the midnight-js providers to Lace and
+  the public Midnight Preprod indexer.
 - **No backend, no custom API**: every call goes to Midnight/Lace
   infrastructure. There is no server-side copy of applicant data.
 - **No URL leakage**: no state is encoded into the URL.
