@@ -58,7 +58,7 @@ locally through a proof server. The wallet configuration points
 `provingServerUrl` at `http://127.0.0.1:6300`. Midnight's official
 documentation and the reference repositories all run the proof server as a
 Docker container for Preprod deployment — you do **not** need a local node or
-indexer, only the proof server. The Netlify app does **not** depend on it
+indexer, only the proof server. The static frontend does **not** depend on it
 (Lace provides proving for the wallet user).
 
 Start it locally:

@@ -244,9 +244,13 @@ the contract manually, and Netlify (below) publishes the static frontend. See
 ## Static hosting (Netlify)
 
 `netlify.toml` configures a static site build of `frontend/dist`. The Netlify
-build repeats the same compile/test/build pipeline and bakes the public
-`VITE_*` environment values into the bundle. Configured, committed — a live
-deployment is a one-click Netlify action. See `docs/STATIC-HOSTING.md`.
+build installs the pinned Compact toolchain and dependencies, compiles the
+contract, copies the generated ZK/frontend artifacts, builds the frontend, and
+publishes `frontend/dist` with the public `VITE_*` environment values baked
+into the bundle. Netlify does **not** run the full test suite in its build
+command — GitHub Actions (above) is the validation pipeline, while Netlify is
+the static build/publish pipeline. Configured, committed — a live deployment is
+a one-click Netlify action. See `docs/STATIC-HOSTING.md`.
 
 ## GitHub Actions compatibility
 

@@ -10,8 +10,9 @@ CI.
 - The workflow (`.github/workflows/ci.yml`) is **committed** (`ci: add GitHub
   Actions validation`).
 - The exact same command sequence has been **run and passed locally** on Linux
-  (gates + `actionlint` 1.7.12, exit 0). A GitHub run is triggered automatically
-  on the next push / pull request.
+  (gates + `actionlint` 1.7.12, exit 0).
+- The workflow is **confirmed passing on GitHub**: run **5** (ID `34627525548`),
+  commit `a863dec...`, event push — conclusion **success** (all steps green).
 - The workflow is **read-only**: `permissions: contents: read` — it cannot
   mutate the repository, and it carries no tokens, seeds, or wallets.
 
@@ -31,7 +32,8 @@ Verify devtools     (compact --version  == compact 0.5.1)
 Select toolchain    (compact update 0.31.1; compact list; compact compile --version == 0.31.1)
 npm ci                                (root — contract runtime + test tooling)
 npm --prefix frontend ci              (frontend — Vite/React)
-npm run compile                       (regenerate gitignored compiled artifacts)
+npm run compile                       (regenerate gitignored managed artifacts)
+npm run copy-zk-assets                (copy compiled contract + ZK assets into frontend)
 npm test                              (47 tests incl. real Groth16 proof)
 npm run build                         (tsc, root)
 npm run build:frontend                (production frontend build)
@@ -73,6 +75,7 @@ are the same values committed in `netlify.toml` and `frontend/.env.example`.
 ```bash
 npm ci && npm --prefix frontend ci
 npm run compile
+npm run copy-zk-assets
 npm test
 npm run build
 VITE_NETWORK_ID=preprod VITE_CONTRACT_ADDRESS=<address> npm run build:frontend
