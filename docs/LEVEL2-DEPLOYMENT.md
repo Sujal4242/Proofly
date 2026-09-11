@@ -7,8 +7,12 @@ to the deployed contract via Lace. The deployer process below runs on a **local
 machine**, is never part of the Netlify build, and uses **testnet resources
 only — no real money.**
 
-> Status: **preparation only.** No deployment has been executed. The steps
-> below are ready to run when the operator chooses to.
+> Status: **replaced by Level 3.** This guide describes how the Level 2
+> deployment was prepared and executed. The executed Level 2 record lives in
+> `docs/evidence/DEPLOYMENT.md`; the Level 3 contract (per-application replay
+> protection) was deployed to Preprod with this exact same procedure and its own
+> record in the Level 3 section of the same evidence file. The steps below remain
+> the canonical operator procedure for any future redeployment.
 
 ---
 
@@ -142,7 +146,7 @@ paths are gitignored and never committed). Additional optional variables:
 
 ```bash
 npm run compile                 # ensure compiled artifacts exist
-npm test                        # all 24 tests green
+npm test                        # all 47 tests green
 npm run build                   # root TS check
 npm run build:frontend          # static frontend build
 npm run proof-server:start      # start the local proof server
@@ -208,9 +212,15 @@ The script performs these steps in order:
 
 ## 10. Explicit exclusions
 
-- No deployment has been run from this repository yet.
-- No deployer seed exists in the repository, tests, or CI.
-- Level 3 (nullifiers, issuer, Merkle allowlists, revocation) is **not**
-  implemented and is out of scope for this deployment.
-- The privacy circuit (`contracts/proofly.compact`) is unchanged; income stays
-  witness-only; `requiredMonthlyIncome` remains the only circuit argument.
+- Deployments **are** executed from this repository; the deployer script is
+  still operator-only and never run by Netlify, GitHub Actions, or any CI.
+- No deployer seed exists in the repository, tests, or CI — it is supplied at
+  runtime via `PROOFLY_DEPLOYER_SEED`.
+- Level 3 replay protection (nullifiers) **is** implemented and deployed on the
+  same contract address; see `docs/evidence/DEPLOYMENT.md` and
+  `docs/LEVEL3-ARCHITECTURE.md`. What remains out of scope is an issuer
+  authority, applicant-id registries, Merkle allowlists, thresholds stored
+  on-chain, and revocation — none are part of the current contract design.
+- The privacy circuit (`contracts/proofly.compact`) keeps income as a witness;
+  the circuit arguments are now `requiredMonthlyIncome` **and** `applicationId`
+  (Level 3 claim scoping), not a single argument.

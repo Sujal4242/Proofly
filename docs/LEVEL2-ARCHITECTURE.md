@@ -1,5 +1,10 @@
 # Proofly — Level 2 Architecture
 
+> Historical record — describes the Level 2 Live-Preprod foundation as built.
+> The **current** Level 3 architecture (replay protection, `applicationId`
+> claim scope, `applicantId` witness, deterministic preflight) is documented in
+> `docs/LEVEL3-ARCHITECTURE.md`.
+
 This document describes the Live Preprod foundation added on top of the Level 1
 local proof demo. It mirrors the proven ShadowPass-V2 / ShadowPass-Level5 /
 ShadowBid browser architectures, adapted to Proofly's single `income` witness.
