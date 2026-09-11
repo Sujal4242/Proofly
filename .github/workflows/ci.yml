@@ -1,0 +1,100 @@
+name: CI
+
+# Proofly continuous integration — runs on EVERY push and on pull requests.
+#
+# This workflow is CI-ONLY. It never:
+#   - deploys Midnight contracts (no PROOFLY_DEPLOYER_SEED / no deploy script)
+#   - deploys to Netlify
+#   - submits blockchain transactions
+#
+# The Compact developer tools (devtools) are pinned to 0.5.1 and the Compact
+# compiler/toolchain to 0.31.1 — matching the repository's verified toolchain
+# (see README "Requirements" and "GitHub Actions compatibility"). The generated
+# artifacts under contracts/managed/ are gitignored, so `npm run compile` runs
+# before every test/build that depends on them.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: compile-test-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22 with npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      # ── Compact toolchain (devtools 0.5.1 + compiler 0.31.1) ──────────────
+      # Official installer, pinned to the exact devtools release (same method
+      # used by the Midnight reference projects and docs):
+      #   curl --proto '=https' --tlsv1.2 -LsSf <...>/compact-v0.5.1/compact-installer.sh | sh
+      - name: Install Compact devtools CLI 0.5.1
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf \
+            https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
+          # The installer drops the `compact` binary under ~/.local/bin and
+          # writes a PATH script; register both candidate locations for the
+          # remaining steps of this job.
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.compact/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Compact devtools CLI version (expect compact 0.5.1)
+        run: |
+          VERSION="$(compact --version)"
+          echo "compact --version → $VERSION"
+          if [ "$VERSION" != "compact 0.5.1" ]; then
+            echo "::error::Unexpected Compact devtools version: $VERSION (expected compact 0.5.1)"
+            exit 1
+          fi
+
+      - name: Select and verify Compact toolchain 0.31.1
+        run: |
+          compact update 0.31.1
+          compact list
+          TOOLCHAIN="$(compact compile --version)"
+          echo "selected toolchain → $TOOLCHAIN"
+          if [ "$TOOLCHAIN" != "0.31.1" ]; then
+            echo "::error::Unexpected Compact toolchain: $TOOLCHAIN (expected 0.31.1)"
+            exit 1
+          fi
+
+      # ── Dependencies ───────────────────────────────────────────────────────
+      - name: Install dependencies reproducibly (npm ci, root + frontend)
+        run: |
+          npm ci
+          npm --prefix frontend ci
+
+      # ── Compile (regenerates the gitignored managed artifacts) ────────────
+      - name: Compile Compact contract (npm run compile)
+        run: npm run compile
+
+      # ── Quality gates ──────────────────────────────────────────────────────
+      - name: Run test suite (npm test)
+        run: npm test
+
+      - name: Root TypeScript build (npm run build)
+        run: npm run build
+
+      # VITE_CONTRACT_ADDRESS is PUBLIC on-chain configuration (the deployed
+      # Proofly Level 3 contract); VITE_NETWORK_ID is the preprod network id.
+      # No secret is used anywhere in this workflow.
+      - name: Frontend production build (npm run build:frontend)
+        run: npm run build:frontend
+        env:
+          VITE_NETWORK_ID: preprod
+          VITE_CONTRACT_ADDRESS: bc9c4a53aac2d1c67d17456083d646fc302e32935acd351ad45b82c9d511dc2a
