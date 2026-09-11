@@ -5,6 +5,8 @@ dist/
 midnight-level-db/
 .env
 .env.local
+.env.preprod
+.env.*.local
 *.tsbuildinfo
 coverage/
 frontend/dist/

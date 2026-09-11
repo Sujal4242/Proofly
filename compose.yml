@@ -1,0 +1,27 @@
+# Proofly — deployment-only local proof server
+#
+# LOCAL USE ONLY — do not expose these ports to a public network, and never
+# make the deployed Netlify application depend on this container. It is used
+# exclusively by the one-time operator deployment script
+# (scripts/deploy-proofly.ts) to generate zero-knowledge proofs locally.
+#
+# Start:  npm run proof-server:start
+# Stop:   npm run proof-server:stop
+#
+# On first boot the proof server downloads zero-knowledge public parameters
+# (SRS) from midnight's S3 shares; explicit DNS is required for Docker Desktop
+# bridge networks on WSL2.
+name: proofly-deploy
+
+services:
+  proof-server:
+    image: midnightntwrk/proof-server:8.1.0
+    container_name: proofly-proof-server
+    command: ["midnight-proof-server", "-v"]
+    ports:
+      - "6300:6300"
+    environment:
+      RUST_BACKTRACE: "full"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4

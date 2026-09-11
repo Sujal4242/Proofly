@@ -22,7 +22,14 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "predev:frontend": "npm run check:compiled",
     "build:frontend": "npm --prefix frontend run build",
-    "prebuild:frontend": "npm run check:compiled"
+    "prebuild:frontend": "npm run check:compiled",
+    "deploy:proofly": "tsx scripts/deploy-proofly.ts",
+    "deploy:proofly:validate": "tsx scripts/deploy-proofly.ts --validate",
+    "deploy:proofly:address": "tsx scripts/deploy-proofly.ts --derive-address",
+    "deploy:proofly:check-funds": "tsx scripts/deploy-proofly.ts --check-funds",
+    "proof-server:start": "docker compose up -d",
+    "proof-server:stop": "docker compose down",
+    "proof-server:ps": "docker compose ps"
   },
   "dependencies": {
     "@midnight-ntwrk/compact-js": "2.5.1",
@@ -36,8 +43,18 @@
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
+    "@midnight-ntwrk/midnight-js-contracts": "4.1.1",
+    "@midnight-ntwrk/midnight-js-http-client-proof-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-indexer-public-data-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-level-private-state-provider": "4.1.1",
+    "@midnight-ntwrk/midnight-js-network-id": "4.1.1",
+    "@midnight-ntwrk/midnight-js-protocol": "4.1.1",
+    "@midnight-ntwrk/wallet-sdk": "1.2.0",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "4.23.13",
     "typescript": "^6.0.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "ws": "8.21.3"
   }
 }
