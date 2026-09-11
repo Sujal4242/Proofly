@@ -1,296 +1,275 @@
 # Proofly
 
-**Private Proof-of-Income on Midnight — prove `monthlyIncome >= requiredThreshold` without revealing the income.**
+### Prove your income. Don't reveal your income.
 
-Proofly runs as **two modes** in the same app and repository:
+Proofly lets an applicant prove that their **private monthly income satisfies a
+required threshold** using a **Midnight zero-knowledge proof** — without ever
+revealing the exact income to the verifier.
 
-- **Local Demo** — the offline, wallet-free experience. Generates and verifies the
-  zero-knowledge proof using the real compiled circuit entirely in the browser
-  tab, and demonstrates the privacy property (different incomes → byte-identical
-  public inputs) and replay protection (one claim per application). Works
-  without Lace or Preprod.
-- **Live Preprod** — the real Midnight flow. Connects the **Lace wallet**
-  (Midnight DApp Connector) to **Midnight Preprod**, assembles the midnight-js
-  browser providers, and proves `income >= requiredMonthlyIncome` on a **deployed
-  Proofly contract** via `callTx.proveIncome(requiredMonthlyIncome, applicationId)`.
-  Requires Lace, a deployed Proofly contract address, and testnet funds only —
-  **no real money**.
+![Midnight](https://img.shields.io/badge/Midnight%20Preprod-ZK%20proof-5fc9ab)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6)
+![React](https://img.shields.io/badge/React-61dafb)
+![Vite](https://img.shields.io/badge/Vite-646cff)
+![Tests](https://img.shields.io/badge/tests-47%20passing-2ea44f)
+![CI](https://github.com/Sujal4242/Proofly/actions/workflows/ci.yml/badge.svg)
 
-## Current state
+A single static React/Vite app runs two experiences: an offline **Local Demo**
+and a **Live Proof** against the deployed Proofly contract on Midnight Preprod.
 
-- **Levels 1–3 are complete and deployed.** The Level 3 contract that adds
-  per-application replay protection is deployed on Midnight Preprod; the
-  operator deployment is recorded in `docs/evidence/DEPLOYMENT.md`.
-- **Level 4 production architecture is configured:** a GitHub Actions CI
-  workflow (`.github/workflows/ci.yml`) validates every push/PR, and a Netlify
-  static-hosting config (`netlify.toml`) publishes the frontend. Both are
-  committed; see `docs/CI-CD.md` and `docs/STATIC-HOSTING.md`.
-- Test suite: **47/47 tests passing** across 8 test files.
+---
+
+## Preview
+
+> Live UI preview will be added with the final demo capture.
+
+---
+
+## Why Proofly
+
+Traditional income verification asks applicants to disclose a number or a
+document. That leaks more than the verifier actually needs — the income itself.
+
+Proofly changes the question. Instead of
+
+> "What is your income?"
+
+the verifier asks
+
+> "Can you prove your income meets this requirement?"
+
+The answer comes back as a zero-knowledge proof of `income ≥ threshold` for a
+specific application — verified on-chain, with the exact income never leaving
+the applicant's browser.
+
+## The core idea
+
+```text
+Private income
+      ↓
+Zero-knowledge proof
+      ↓
+Public threshold + application scope
+      ↓
+Verified / denied
+```
+
+- **Income** is private — it exists only inside the proof, as a zero-knowledge
+  witness.
+- **Applicant identity** is also private witness material — a fresh, random
+  32-byte value generated per claim that is never revealed on-chain.
+- **Required threshold** is public — it is the circuit argument the verifier
+  wants the applicant to meet.
+- **Application ID** is public — it scopes the claim to one application so a
+  proof can't be reused elsewhere.
+- The **verifier receives the proof outcome and the public claim information,
+  never the exact income**.
 
 ## Privacy model
 
-- **Public:** the `proofCount` on-chain ledger, the used-nullifier set, the two
-  public circuit arguments (`requiredMonthlyIncome`, `applicationId`), and the
-  ZK proof/transcript.
-- **Private:** the exact monthly income (the `income` witness) and a fresh
-  per-claim `applicantId` identity (a second witness that scopes the claim and
-  derives the nullifier). Both live only in-memory in the applicant's browser —
-  never circuit arguments, never ledger state, never logged, never in a URL,
-  never in localStorage/sessionStorage, never sent to a custom API.
-- Enforced by tests: `tests/proofly.privacy.test.ts` (byte-identical public
-  inputs across different incomes at the same threshold), a real Groth16 proof
-  test in `tests/proofly.contract.test.ts`, the nullifier/replay suite
-  (`tests/proofly.nullifier.test.ts`), and the Level 2/3 frontend suites covering
-  witness wiring, sub-threshold denial, replay denial, error classification,
-  config defaults, and Live-mode gating when no contract address is configured.
+| Data | Visibility | Purpose |
+|---|---|---|
+| Monthly income (`income`) | **Private witness** | The value being proved; never revealed |
+| Applicant identity (`applicantId`) | **Private witness** | Fresh per claim; scopes the claim and derives the nullifier; never shown on-chain |
+| Required threshold (`requiredMonthlyIncome`) | **Public** circuit argument | The requirement the income must meet |
+| Application ID (`applicationId`) | **Public** circuit argument | Claim-scoping input the proof is bound to |
+| `proofCount` | **Public** ledger | Monotonically increasing count of accepted claims |
+| `usedNullifiers` | **Public** ledger | On-chain replay-protection set |
+| Exact income | **Never stored on-chain** | Absent from ledger state, logs, URLs, storage, and any custom API |
 
-The **Live mode UI never re-shows the entered income** after proof submission;
-only the Local Demo (an explicit local demonstration) displays the values the
-applicant typed.
+The Live UI **never re-displays the income** after submission — only the public
+outcome. The repo ships **no backend**: no server, no database, no custom API.
+Every network call goes to Midnight/Lace infrastructure and the public indexer.
 
-## Level 3: proof-of-income with replay protection
+## Replay protection
 
-The contract circuit is:
+Each accepted claim computes an on-chain nullifier scoped to:
 
-```text
-proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>)
+```
+persistentHash("proofly:claim:" || applicationId || threshold || applicantId)
 ```
 
-- The **exact income is a witness**, never an argument.
-- The claim is scoped by a **public `applicationId`** (the applicant must prove
-  "my income is ≥ this threshold, for *this* application").
-- A **nullifier** is derived from a secret `applicantId` witness plus the
-  application scope, and every accepted claim inserts its nullifier into the
-  on-chain `usedNullifiers` set. The circuit asserts the nullifier is not
-  already present — **repeating the same claim is denied by the contract
-  itself**, not by convention in the frontend.
+So a claim is unique to its **application scope + threshold + applicant
+identity**. Consequences (all verified by `tests/proofly.nullifier.test.ts`):
 
-### Replay semantics (what the nullifier actually binds)
+- **Same application, threshold, and identity re-claimed** → **denied**
+  (`Claim already used for this application`).
+- **Changing only the income** does not change the nullifier (income is not part
+  of it) → the scope + identity is already used → **denied**.
+- **Different `applicationId`** → a separate claim scope → accepted.
+- **Different applicant identity** → a separate scoped claim → accepted.
 
-The nullifier is `persistentHash(prefix || applicationId || threshold || applicantId)`.
-Consequences, all verified by `tests/proofly.nullifier.test.ts`:
+In **Live Proof**, every claim generates a *fresh* identity (`crypto.getRandomValues`),
+so claiming an already-used application ID with a new identity is a valid,
+independent claim — exact contract-level replay of the identical triple is what
+the circuit itself refuses.
 
-| Scenario | Result |
-|---|---|
-| Same `applicationId` re-claimed with the same identity | **denied** (`Claim already used for this application`) |
-| Same `applicationId`, *different* applicant identity | **accepted** — a different, independent claim |
-| Different `applicationId`, same identity | **accepted** — a different claim scope |
-| Changing only the income (same scope + identity) | **denied** — the nullifier does not depend on income, so the scope is already used |
+## How it works
 
-In **Local Demo** one identity is held fixed per sequence check so replay is
-observable; in **Live mode** every claim generates a fresh `applicantId`, so a
-claim on a previously used `applicationId` silently becomes a fresh, valid
-claim (only a full contract-level replay of the identical triple is denied).
+1. The applicant enters their **monthly income** locally — it stays in the tab.
+2. The applicant supplies the **required threshold** and **Application ID**
+   (public inputs).
+3. Proofly runs a **local preflight** — the same circuit, unproven, against the
+   current on-chain ledger — so deterministic denials (income below threshold,
+   exact replay) surface before the wallet is ever contacted.
+4. **Lace / Midnight.js** generates the zero-knowledge proof using the private
+   witnesses.
+5. The transaction is submitted to **Midnight Preprod** and confirmed on-chain.
+6. The verifier sees the **verified result and public claim information — not
+   the income**.
 
-### Deterministic preflight (Live mode)
+The preflight is advisory and fast; the **on-chain circuit remains the final
+enforcement boundary**.
 
-Before the wallet/prover is asked to produce anything, a **local unproven-circuit
-preflight** (`preflightProveIncome`) runs the same circuit + witnesses + public
-arguments against the current on-chain ledger. A deterministic denial (income
-below threshold, exact replay) surfaces as `Proof denied — <assertion>` and the
-wallet is never contacted. Generic preflight failures (indexer/decode) are
-non-fatal and fall through to the real wallet flow.
+## Product modes
+
+### Live Proof
+
+- Connects the **Lace wallet** (Midnight DApp Connector) on **Midnight Preprod**
+  — a real testnet, real contract, real transaction.
+- Generation runs locally in the browser; the signed proof is submitted against
+  the deployed Proofly contract via `callTx.proveIncome(threshold, applicationId)`.
+- Requires test funds only — **no real money**.
+- The **exact income is never displayed after submission** — the UI shows only
+  the public outcome.
+
+### Local Demo
+
+- An offline, wallet-free demonstration of the same compiled circuit, entirely
+  in the browser tab.
+- Built to make pass / fail / replay behavior easy to experiment with:
+  generate a proof, check the privacy property, and watch replay protection
+  reject a second claim under one identity.
+- May display the entered test income — deliberately, because it is an explicit
+  local demonstration of the privacy property.
 
 ## Architecture
 
+```mermaid
+flowchart LR
+    A[Applicant Browser] --> B[Proofly React / Vite]
+    B --> C[Midnight.js]
+    C --> D[Lace Wallet]
+    C --> E[Midnight Preprod]
+    E --> F[Proofly Contract]
 ```
-Browser static frontend (React + Vite)
-        ↓
-Lace DApp Connector (window.midnight)
-        ↓
-midnight-js providers (Midnight.js)
-        ↓
-Midnight Preprod (public indexer + deployed Proofly contract)
-```
 
-No custom backend. No server-side state, no proxy, no deployed "engine", no
-custom API. The frontend is static; every network call goes to Midnight/Lace
-infrastructure or the public indexer. See `docs/LEVEL3-ARCHITECTURE.md` for the
-current provider, privacy, and replay architecture (`docs/LEVEL2-ARCHITECTURE.md`
-retains the original Level 2 description).
+The frontend is a static site — no backend, no server-side state, no proxy.
+The contract lives on-chain on Midnight Preprod; the applicant's browser holds
+all private inputs (income, identity) as zero-knowledge witnesses.
 
-## Requirements
+## Status
 
-| Tool | Version |
+| Component | Status |
 |---|---|
-| **Node.js** | 22.x |
-| **Compact CLI** | `compact` (Midnight devtools) **0.5.1**, compiler toolchain **0.31.1** |
-| **OS** | Linux / WSL / macOS. The same commands run in GitHub Actions. |
+| Contract — Level 3 (replay protection) | **Deployed** on Midnight Preprod — see [deployment evidence](docs/evidence/DEPLOYMENT.md) |
+| Test suite | **47/47 passing** across 8 files |
+| CI (GitHub Actions) | **Passing** — compile, test, type-check, build on every push/PR |
+| Static hosting (Netlify) | **Configured** (`netlify.toml`) — a live deployment is a deliberate operator action, not yet performed |
 
-> The compiler is deliberately pinned to **0.31.1** (contract `pragma language_version >= 0.23`, `contracts/managed/proofly/compiler/contract-info.json` reports compiler `0.31.1` / runtime `0.16.0`). Do **not** switch to 0.34.0 — the generated artifacts must match the pinned toolchain.
+## Getting started
 
-## Fresh-clone setup
-
-Generated artifacts under `contracts/managed/proofly/` are **gitignored and never committed**, so a fresh clone must compile the contract before anything that reads those artifacts (tests, TypeScript checks under `npm run build`, and the frontend build/dev). The npm scripts below enforce this automatically: if the artifacts are missing, the commands fail fast with:
-
-```
-[check-compiled] Missing compiled contract artifacts:
-  - contracts/managed/proofly/...
-[check-compiled] Fix: run  npm run compile
-```
-
-### 1. Install Node 22.x
-
-Use your preferred manager (`nvm`, `fnm`, system packages). Verify:
-
-```bash
-node --version   # v22.x
-npm --version
-```
-
-### 2. Install the Compact devtools CLI and pin the toolchain
+Requirements: **Node.js 22** and the **Compact** devtools, **pinned** to CLI
+`0.5.1` and compiler toolchain `0.31.1`:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf \
   https://github.com/midnightntwrk/compact/releases/download/compact-v0.5.1/compact-installer.sh | sh
 compact update 0.31.1
-compact list           # 0.31.1 should be marked with →
 compact compile --version   # must print 0.31.1
 ```
 
-### 3. Install npm dependencies
+Generated artifacts under `contracts/managed/proofly/` are **gitignored and
+never committed** — a fresh clone compiles the contract first:
 
 ```bash
-npm ci                  # root (contract runtime + test tooling)
+npm ci
 npm --prefix frontend ci
-```
-
-### 4. Compile the Compact contract
-
-```bash
-npm run compile
-```
-
-This regenerates `contracts/managed/proofly/` (gitignored) — the ZKIR, proving/verifying keys, and the compiled `contract/index.js` + type declarations consumed by both the tests and the frontend.
-
-### 5. Run the tests
-
-```bash
-npm test
-```
-
-Runs the full **47-test** suite (8 files): contract behaviour + a real Groth16
-proof generation/verification, privacy byte-comparisons, nullifier/replay
-semantics, and the frontend suites (witness wiring, below-threshold denial,
-replay denial, error classification, config defaults, Live-mode gating). The
-proof tests fetch the public Groth16 SRS parameters from Midnight's dev S3
-fileshare on first run.
-
-### 6. TypeScript checks
-
-```bash
-npm run build
-```
-
-### 7. Frontend
-
-```bash
-npm run build:frontend   # production build (also runs copy-zk-assets from the compiled artifacts)
+npm run compile          # regenerates the gitignored managed artifacts
+npm test                 # 47 tests incl. a real Groth16 proof
+npm run build            # TypeScript (tsc)
+npm run build:frontend   # production frontend build (Vite)
 npm run dev:frontend     # hot-reload dev server → http://localhost:5173
 ```
 
-### 8. Configure the Live Preprod contract address
-
-Live submission is **disabled until a real deployment provides the address**:
+**Live Proof** is disabled until a real deployment provides the contract
+address:
 
 ```bash
-# Optional, once a contract is deployed on Preprod:
 cp frontend/.env.example frontend/.env
-# set VITE_CONTRACT_ADDRESS=<hex address from the deployment>
+# set VITE_CONTRACT_ADDRESS=<hex address from docs/evidence/DEPLOYMENT.md>
 ```
 
-Until then the wallet can be connected and the provider foundation is real, but
-the "Prove income on Preprod" action stays disabled and the ProofCounter shows a
-clear "no deployed contract" state. No contract address is invented.
+The address is a **public** value; the deployer seed and wallet state are never
+part of the app, CI, or the repo.
 
-### 9. Deploy the contract to Midnight Preprod (operator-only, one-time)
+## Deploying the contract (operator-only, one-time)
 
-The repository contains a **local-only, operator-only deployment script**
-(`scripts/deploy-proofly.ts`) that deploys the compiled Proofly contract to
-Preprod with a dedicated deployer wallet. It is never run by Netlify or CI.
-
-Operator prerequisites: Node 22, Compact 0.31.1, Docker (the local proof
-server is required for the wallet-sdk proving path), and a **dedicated**
-deployer seed funded with **testnet** tNIGHT/tDUST through the official
-Midnight faucet process (no real money, no fake funding).
+Contract deployment to Midnight Preprod is a **local, operator-only** step and
+is never run by CI or Netlify:
 
 ```bash
-npm run deploy:proofly:validate   # preflight only — no wallet, no transactions
-npm run proof-server:start        # local proof server (proof-server:8.1.0, port 6300)
+npm run deploy:proofly:validate   # reads PROOFLY_DEPLOYER_SEED from env only
+npm run proof-server:start        # local proof server (proof-server:8.1.0)
 PROOFLY_DEPLOYER_SEED="<64-hex>" npm run deploy:proofly
 ```
 
-The deployer seed is read **only** from the `PROOFLY_DEPLOYER_SEED` environment
-variable (never hardcoded, printed, committed, or exposed to the app/CI). The
-script persists gitignored wallet state under `.midnight-wallet-state/`, a
-mandatory guard refuses any network other than `preprod`, and it requires
-typing `DEPLOY` to confirm. Only **non-secret** evidence is written to
-`docs/evidence/DEPLOYMENT.md` (network, contract address, tx ID, block height,
-block hash, timestamp, compiler/runtime versions).
+The seed is read **only** from `PROOFLY_DEPLOYER_SEED` — never hardcoded,
+printed, committed, or exposed to the app/CI. Only non-secret evidence
+(network, address, tx ID, block height/hash) is recorded in the
+[deployment evidence](docs/evidence/DEPLOYMENT.md). See
+[`docs/LEVEL2-DEPLOYMENT.md`](docs/LEVEL2-DEPLOYMENT.md) for the full
+procedure.
 
-Full instructions, security warnings, and verification steps:
-**`docs/LEVEL2-DEPLOYMENT.md`**. The Level 3 deployment followed the exact same
-procedure; its record is in the Level 3 section of `docs/evidence/DEPLOYMENT.md`.
+## CI / static hosting
 
-## CI / CD
+- **GitHub Actions** (`.github/workflows/ci.yml`) validates every push and PR:
+  compile the contract, run all 47 tests, type-check, and build the production
+  frontend — on the pinned toolchain and Node 22. Read-only; no secrets.
+  [`docs/CI-CD.md`](docs/CI-CD.md)
+- **Netlify** (`netlify.toml`) is the static **build/publish** pipeline (CI is
+  the validation pipeline — Netlify does not re-run the full test suite). It
+  bakes in the public `VITE_*` values and publishes `frontend/dist`.
+  Configured and committed; not yet live. [`docs/STATIC-HOSTING.md`](docs/STATIC-HOSTING.md)
 
-`.github/workflows/ci.yml` runs the full validation pipeline on every push and
-PR: compile the contract, run all tests, run the TypeScript build, and build the
-production frontend — all on the pinned Compact toolchain (0.5.1 CLI, 0.31.1
-compiler) and Node 22. Deployments are **not** automated: the operator deploys
-the contract manually, and Netlify (below) publishes the static frontend. See
-`docs/CI-CD.md` for the exact steps and version pins.
+## Documentation
 
-## Static hosting (Netlify)
-
-`netlify.toml` configures a static site build of `frontend/dist`. The Netlify
-build installs the pinned Compact toolchain and dependencies, compiles the
-contract, copies the generated ZK/frontend artifacts, builds the frontend, and
-publishes `frontend/dist` with the public `VITE_*` environment values baked
-into the bundle. Netlify does **not** run the full test suite in its build
-command — GitHub Actions (above) is the validation pipeline, while Netlify is
-the static build/publish pipeline. Configured, committed — a live deployment is
-a one-click Netlify action. See `docs/STATIC-HOSTING.md`.
-
-## GitHub Actions compatibility
-
-All build steps are plain POSIX commands (no WSL- or macOS-only syntax):
-
-```
-actions/checkout@v4 → actions/setup-node@v4 (node 22) → npm ci (root + frontend)
-→ install Compact devtools 0.5.1 + compact update 0.31.1 → npm run compile
-→ npm test → npm run build (tsc) → npm run build:frontend
-```
+- [`docs/LEVEL3-ARCHITECTURE.md`](docs/LEVEL3-ARCHITECTURE.md) — current contract, privacy, and replay architecture
+- [`docs/FINAL-DEMO-RUNBOOK.md`](docs/FINAL-DEMO-RUNBOOK.md) — scripted end-to-end demo walkthrough
+- [`docs/SECURITY-AND-SECRETS.md`](docs/SECURITY-AND-SECRETS.md) — what the app never does; secret policy
+- [`docs/evidence/DEPLOYMENT.md`](docs/evidence/DEPLOYMENT.md) — actual Preprod deployments (Level 2 + Level 3)
+- [`docs/CI-CD.md`](docs/CI-CD.md) / [`docs/STATIC-HOSTING.md`](docs/STATIC-HOSTING.md) — pipeline references
 
 ## Repository layout
 
 ```
 contracts/proofly.compact                 ← the Compact contract (source of truth)
-scripts/check-compiled.mjs                ← shared guard used by npm lifecycle hooks
-tests/                                    ← vitest suite (contract + privacy + nullifier + L2/L3 frontend)
+scripts/                                  ← compile guard, deploy tooling
+tests/                                    ← 47 tests: contract, privacy, nullifier, frontend
 frontend/                                 ← static Vite/React app
-frontend/src/config.ts                    ← public config (Preprod defaults, no income)
-frontend/src/hooks/useMidnight.ts         ← Lace discovery, connect, disconnect
-frontend/src/hooks/useProofly.ts          ← Live proof + preflight + proofCount reads
-frontend/src/midnight/providers.ts        ← 7 midnight-js browser providers
-frontend/src/midnight/contract-service.ts ← CC.make('proofly').pipe(withWitnesses) + preflight
-frontend/src/midnight/witnesses.ts        ← THE privacy boundary (income + applicantId witnesses)
-frontend/src/midnight/errors.ts           ← denied vs wallet/funds/network classification
-frontend/src/proofly/local-circuit.ts     ← Local Demo circuit runner + claim sequences
-frontend/src/components/                  ← LocalDemo, WalletConnect, ProofPanel, ...
-frontend/.env.example                     ← VITE_NETWORK_ID / VITE_CONTRACT_ADDRESS / indexer
-.github/workflows/ci.yml                  ← full validation on every push/PR (Level 4)
+  src/midnight/witnesses.ts               ← the privacy boundary (income + identity witnesses)
+  src/midnight/contract-service.ts        ← proof call + deterministic preflight
+  src/midnight/errors.ts                  ← denial vs wallet/network classification
+  src/proofly/local-circuit.ts            ← Local Demo circuit runner
+  src/components/                         ← LocalDemo, WalletConnect, ProofPanel, ProofStatus, …
+docs/                                     ← architecture, security, runbook, evidence
+.github/workflows/ci.yml                  ← validation pipeline (Level 4)
 netlify.toml                              ← static publishing config (Level 4)
-docs/LEVEL2-ARCHITECTURE.md               ← provider + privacy architecture (original Level 2)
-docs/LEVEL2-DEPLOYMENT.md                 ← one-time operator deployment guide (Preprod)
-docs/LEVEL3-ARCHITECTURE.md               ← current Level 3 replay architecture
-docs/CI-CD.md                             ← GitHub Actions pipeline reference
-docs/STATIC-HOSTING.md                    ← Netlify static publishing reference
-docs/SECURITY-AND-SECRETS.md              ← secret handling + surfacing policy
-docs/FINAL-DEMO-RUNBOOK.md                ← end-to-end demo walkthrough script
-docs/evidence/DEPLOYMENT.md               ← deployments actually executed (L2 + L3 records)
-scripts/deploy-proofly.ts                 ← local-only deployer (seed via PROOFLY_DEPLOYER_SEED)
-scripts/deploy-wallet-state.ts            ← gitignored deployer wallet-state persistence
-compose.yml                               ← deploy-only local proof-server container (:6300)
-contracts/managed/proofly/                ← generated by `npm run compile` (gitignored)
 ```
+
+## Security
+
+Proofly is a **privacy-first, secret-free** application:
+
+- The only secrets — the income and the per-claim identity — are in-memory
+  React state and witness closures; they never leave the tab.
+- No `localStorage`/`sessionStorage`/`IndexedDB`, no URL encoding of state, no
+  console leaks, no custom network calls.
+- No private keys, seeds, or credentials in the repository, tests, docs, CI,
+  or Netlify.
+
+See [`docs/SECURITY-AND-SECRETS.md`](docs/SECURITY-AND-SECRETS.md) for the
+audited guarantees.
+
+## License
+
+MIT
