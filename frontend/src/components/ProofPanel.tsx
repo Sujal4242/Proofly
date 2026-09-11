@@ -51,62 +51,130 @@ export function ProofPanel({ disabled, disabledReason, busy, onProve }: Props) {
   };
 
   return (
-    <div className="card inputs">
-      <label>
-        <span>
-          Monthly income <em>(private witness)</em>
-        </span>
-        <input
-          inputMode="numeric"
-          value={incomeInput}
-          onChange={(e) => setIncomeInput(e.target.value)}
-          placeholder="82500"
-        />
-      </label>
-      <label>
-        <span>
-          Required threshold <em>(public circuit argument)</em>
-        </span>
-        <input
-          inputMode="numeric"
-          value={thresholdInput}
-          onChange={(e) => setThresholdInput(e.target.value)}
-          placeholder="50000"
-        />
-      </label>
-      <label>
-        <span>
-          Application ID <em>(public claim scope)</em>
-        </span>
-        <input
-          value={applicationId}
-          onChange={(e) => setApplicationId(e.target.value)}
-          placeholder="loan-app-2026-01"
-        />
-        <small className="hint">
-          The application this claim is for. Reusing the same ID with the same
-          claim identity is rejected on-chain — but each claim here uses a fresh
-          identity, so independent applications are never blocked by each other.
-        </small>
-      </label>
-      <div className="actions">
+    <form
+      className="claim-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleProve();
+      }}
+    >
+      <fieldset className="fieldset-card -private">
+        <legend className="hidden">Private details</legend>
+        <div className="set-head">
+          <span className="set-title">
+            <span className="tag -private" aria-hidden="true">
+              <span className="dot" />
+              Private
+            </span>
+            Your monthly income
+          </span>
+        </div>
+        <p className="set-desc">
+          Seen by nobody — your income only ever exists inside the zero-knowledge
+          proof. It is cleared from this form after each attempt.
+        </p>
+        <div className="field">
+          <label className="field-label" htmlFor="income">
+            Monthly income
+          </label>
+          <input
+            id="income"
+            className="input"
+            inputMode="numeric"
+            autoComplete="off"
+            spellCheck={false}
+            value={incomeInput}
+            onChange={(e) => setIncomeInput(e.target.value)}
+            placeholder="e.g. 82500"
+          />
+        </div>
+      </fieldset>
+
+      <fieldset className="fieldset-card">
+        <legend className="hidden">Public claim details</legend>
+        <div className="set-head">
+          <span className="set-title">
+            <span className="tag -public" aria-hidden="true">
+              <span className="dot" />
+              Public
+            </span>
+            What the verifier sees
+          </span>
+        </div>
+        <p className="set-desc">
+          The threshold and the application id are visible to the verifier and
+          recorded on-chain — by design, never the income itself.
+        </p>
+        <div className="field">
+          <label className="field-label" htmlFor="threshold">
+            Required monthly income
+          </label>
+          <input
+            id="threshold"
+            className="input"
+            inputMode="numeric"
+            autoComplete="off"
+            spellCheck={false}
+            value={thresholdInput}
+            onChange={(e) => setThresholdInput(e.target.value)}
+            placeholder="e.g. 50000"
+          />
+          <span className="field-hint">
+            The threshold the verifier requires you to meet for this claim.
+          </span>
+        </div>
+        <div className="field">
+          <label className="field-label" htmlFor="applicationId">
+            Application ID
+          </label>
+          <input
+            id="applicationId"
+            className="input"
+            autoComplete="off"
+            spellCheck={false}
+            value={applicationId}
+            onChange={(e) => setApplicationId(e.target.value)}
+            placeholder="loan-app-2026-01"
+          />
+          <span className="field-hint">
+            The application this claim is for. Each claim is scoped to one
+            application, so a proof can&rsquo;t be reused elsewhere — re-claiming
+            the same application with the same identity is rejected on-chain.
+          </span>
+        </div>
+      </fieldset>
+
+      <div className="actions-line">
         <button
-          onClick={handleProve}
+          type="submit"
+          className="btn btn-primary"
           disabled={disabled || busy || !applicationIdValid}
+          aria-busy={busy}
         >
-          {disabled ? 'Live proof unavailable' : busy ? 'Proving…' : 'Prove income on Preprod'}
+          {busy ? (
+            <>
+              <span className="btn-spinner" aria-hidden="true" />
+              Proving…
+            </>
+          ) : disabled ? (
+            'Live proof unavailable'
+          ) : (
+            'Prove privately'
+          )}
         </button>
+        {disabledReason && <span className="step">{disabledReason}</span>}
       </div>
-      {disabledReason && <p className="note">{disabledReason}</p>}
       {!applicationIdValid && (
-        <p className="note err">Enter an application ID to enable the proof.</p>
+        <p className="field-err" style={{ fontSize: 13 }}>
+          Enter an application ID to enable the proof.
+        </p>
       )}
-      <p className="note privacy-note">
+      <p className="privacy-note">
         <strong>Privacy:</strong> your exact income and your per-claim identity
-        stay in this tab — they are only ever inside the zero-knowledge witness.
+        stay in this tab — they only ever live inside the zero-knowledge witness.
         They are not displayed after submission, not stored, not logged, and
-        never sent anywhere. Only the Application ID and threshold are public.
+        never sent anywhere.
       </p>
-    </div>
+    </form>
   );
 }

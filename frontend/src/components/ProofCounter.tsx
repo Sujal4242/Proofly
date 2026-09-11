@@ -11,27 +11,28 @@ interface Props {
 export function ProofCounter({ configured, proofCount, error }: Props) {
   if (!configured) {
     return (
-      <div className="card counter">
-        <h2>Public proofCount</h2>
+      <div>
         <p className="step">
-          No deployed Proofly contract configured yet — this counter activates
-          after a real Preprod deployment and the Live proof becomes active.
+          Proofs recorded by the contract appear here once a Proofly contract
+          address is configured and Live proving is active.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="card counter">
-      <h2>Public proofCount</h2>
+    <div>
       {error ? (
-        <p className="step err">{error}</p>
+        <p className="step err-text">{error}</p>
       ) : proofCount === null ? (
         <p className="step">Reading contract state from the indexer…</p>
       ) : (
-        <p className="step">
-          On-chain proofs recorded: <strong className="count">{proofCount}</strong>
-        </p>
+        <>
+          <span className="counter-num">{proofCount}</span>
+          <p className="counter-muted">
+            public proofCount recorded on-chain by the deployed Proofly contract
+          </p>
+        </>
       )}
     </div>
   );

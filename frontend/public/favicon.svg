@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Proofly">
+  <rect width="32" height="32" rx="7" fill="#161a21" stroke="#262b35" stroke-width="1" />
+  <path
+    d="M5.5 8.5 L15 4 L26.5 8.5 L26.5 23.5 L15 28 L5.5 23.5 Z"
+    fill="none"
+    stroke="#5fc9ab"
+    stroke-width="2"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M11.5 16 l3.2 3.2 6.2-6.4"
+    fill="none"
+    stroke="#5fc9ab"
+    stroke-width="2.2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

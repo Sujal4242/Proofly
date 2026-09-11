@@ -29,27 +29,33 @@ function publicInput(r: ProofResult) {
 }
 
 function ResultPanel({ result }: { result: ProofResult }) {
-  const rejectedLabel =
-    result.rejectedAs === 'replay'
-      ? '✗ Replay denied — this application has already been claimed'
-      : result.rejectedAs === 'below-threshold'
-        ? '✗ Income below the required threshold'
-        : undefined;
+  const accepted = result.outcome === 'accepted';
+  const replay = result.rejectedAs === 'replay';
+  const below = result.rejectedAs === 'below-threshold';
 
   return (
-    <section className={`card result ${result.outcome}`}>
-      <h2>
-        {result.outcome === 'accepted'
-          ? '✓ Proof accepted'
-          : rejectedLabel ?? '✗ Proof rejected'}
-      </h2>
-      {result.outcome === 'accepted' ? (
-        <dl>
+    <section className={`verdict ${accepted ? '-good' : '-warn'}`}>
+      <p className={`verdict-title ${accepted ? '-good' : ''}`}>
+        <span className="ico" aria-hidden="true">
+          {accepted ? '\u2713' : '\u2717'}
+        </span>
+        {accepted
+          ? 'Proof accepted'
+          : replay
+            ? 'Replay denied — already claimed'
+            : below
+              ? 'Income below the required threshold'
+              : 'Proof rejected'}
+      </p>
+      {accepted ? (
+        <dl className="kv">
           <dt>Application ID</dt>
-          <dd><code>{result.applicationId}</code></dd>
+          <dd>
+            <code>{result.applicationId}</code>
+          </dd>
           <dt>Assertion verified</dt>
           <dd>
-            localIncome <strong>{result.privateIncome.toString()}</strong> ≥{' '}
+            local income <strong>{result.privateIncome.toString()}</strong> &#8805;{' '}
             {result.requiredIncome.toString()}
           </dd>
           <dt>Public ledger after run</dt>
@@ -62,21 +68,23 @@ function ResultPanel({ result }: { result: ProofResult }) {
             <code>{result.preimage!.hex.slice(0, 64)}…</code>
           </dd>
           <dt>Time</dt>
-          <dd>{result.elapsedMs} ms (local, no prover server)</dd>
+          <dd>
+            {result.elapsedMs} ms (local, no prover server)
+          </dd>
         </dl>
       ) : (
-        <p className="err">
+        <p className="verdict-body">
           {result.reason}{' '}
-          {result.rejectedAs === 'replay'
+          {replay
             ? '— the per-claim identity re-used the same application'
-            : result.rejectedAs === 'below-threshold'
+            : below
               ? '— asserted locally with "Income below required minimum"'
               : ''}
         </p>
       )}
-      <p className="note">
-        Local Demo: the real Groth16 proof is produced and verified in
-        <code> tests/proofly.contract.test.ts</code> using the same compiled
+      <p className="privacy-note">
+        Local demo: the real Groth16 proof is produced and verified in{' '}
+        <code>tests/proofly.contract.test.ts</code> using the same compiled
         contract.
       </p>
     </section>
@@ -89,41 +97,47 @@ function SequencePanel({ results }: { results: ProofResult[] }) {
   const failed = results.length - success - denied;
 
   return (
-    <section className="card">
-      <h2>Replay protection &amp; cross-application check</h2>
+    <section className="pane">
+      <div className="pane-head">
+        <h2 className="pane-title">Replay protection &amp; cross-application check</h2>
+        <span className="pane-kicker">Same identity</span>
+      </div>
       <p className="step">
         All claims share <strong>one per-claim identity</strong> (held fixed,
-        in-memory only). Second claim with the same application ID should be
-        denied; switching to a different application ID should succeed.
+        in-memory only). The second claim with the same application ID is
+        denied; switching to a different application ID succeeds.
       </p>
-      <dl>
-        <dt>Succeeded</dt>
-        <dd className="ok">{success}</dd>
+      <dl className="kv" style={{ marginTop: 10 }}>
+        <dt>Accepted</dt>
+        <dd className="ok-text">{success}</dd>
         <dt>Replay denied</dt>
-        <dd className="err">{denied}</dd>
+        <dd className="err-text">{denied}</dd>
         {failed > 0 && (
           <>
             <dt>Other failures</dt>
-            <dd className="err">{failed}</dd>
+            <dd className="err-text">{failed}</dd>
           </>
         )}
       </dl>
-      <ol className="sequence">
+      <ol className="timeline">
         {results.map((r, i) => (
-          <li key={i} className={r.outcome === 'accepted' ? 'ok' : 'err'}>
-            <code>{r.applicationId}</code> —{' '}
-            {r.outcome === 'accepted'
-              ? `accepted (proofCount=${r.proofCountAfter})`
-              : r.rejectedAs === 'replay'
-                ? `replay denied — ${r.reason}`
-                : `rejected — ${r.reason}`}
+          <li key={i} className={r.outcome === 'accepted' ? 'ok' : r.rejectedAs === 'replay' ? 'denied' : 'rejected'}>
+            <span className="dot" aria-hidden="true" />
+            <span>
+              <code>{r.applicationId}</code> —{' '}
+              {r.outcome === 'accepted'
+                ? `accepted (proofCount = ${r.proofCountAfter})`
+                : r.rejectedAs === 'replay'
+                  ? `replay denied — ${r.reason}`
+                  : `rejected — ${r.reason}`}
+            </span>
           </li>
         ))}
       </ol>
-      <p className="note">
+      <p className="privacy-note">
         This mirrors the contract-level replay tests using one fixed applicant
-        identity across claims. In Live mode each claim generates a fresh identity
-        per-call; only contract-level replay is observable there.
+        identity across claims. In Live mode each claim generates a fresh
+        identity per call; only contract-level replay is observable there.
       </p>
     </section>
   );
@@ -208,61 +222,121 @@ export function LocalDemo() {
 
   return (
     <>
-      <section className="card inputs">
-        <label>
-          <span>
-            Monthly income <em>(private witness)</em>
-          </span>
-          <input
-            inputMode="numeric"
-            value={incomeInput}
-            onChange={(e) => setIncomeInput(e.target.value)}
-            placeholder="82500"
-          />
-        </label>
-        <label>
-          <span>
-            Required threshold <em>(public circuit argument)</em>
-          </span>
-          <input
-            inputMode="numeric"
-            value={thresholdInput}
-            onChange={(e) => setThresholdInput(e.target.value)}
-            placeholder="50000"
-          />
-        </label>
-        <label>
-          <span>
-            Application ID <em>(public claim scope)</em>
-          </span>
-          <input
-            value={applicationId}
-            onChange={(e) => setApplicationId(e.target.value)}
-            placeholder="loan-app-2026-01"
-          />
-        </label>
-        <div className="actions">
+      <section className="pane demo-note">
+        <div className="pane-head">
+          <h2 className="pane-title">Explore the proof pipeline locally</h2>
+          <span className="pane-kicker">In this tab</span>
+        </div>
+        <p className="step" style={{ marginTop: 8 }}>
+          Enter income, threshold and application ID, then run the proof,
+          the privacy property check, or the replay check. Everything runs
+          offline — this is the only surface that shows the income value,
+          because it is an explicit demonstration.
+        </p>
+
+        <div className="demo-grid" style={{ marginTop: 18 }}>
+          <fieldset className="fieldset-card -private">
+            <legend className="hidden">Private input</legend>
+            <div className="set-head">
+              <span className="set-title">
+                <span className="tag -private" aria-hidden="true">
+                  <span className="dot" />
+                  Private
+                </span>
+                Your monthly income
+              </span>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label className="field-label" htmlFor="demo-income">
+                Monthly income
+              </label>
+              <input
+                id="demo-income"
+                className="input"
+                inputMode="numeric"
+                autoComplete="off"
+                spellCheck={false}
+                value={incomeInput}
+                onChange={(e) => setIncomeInput(e.target.value)}
+                placeholder="e.g. 82500"
+              />
+            </div>
+          </fieldset>
+
+          <fieldset className="fieldset-card">
+            <legend className="hidden">Public inputs</legend>
+            <div className="set-head">
+              <span className="set-title">
+                <span className="tag -public" aria-hidden="true">
+                  <span className="dot" />
+                  Public
+                </span>
+                Threshold &amp; application
+              </span>
+            </div>
+            <div className="field" style={{ marginTop: 12 }}>
+              <label className="field-label" htmlFor="demo-threshold">
+                Required monthly income
+              </label>
+              <input
+                id="demo-threshold"
+                className="input"
+                inputMode="numeric"
+                autoComplete="off"
+                spellCheck={false}
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                placeholder="e.g. 50000"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label" htmlFor="demo-application">
+                Application ID
+              </label>
+              <input
+                id="demo-application"
+                className="input"
+                autoComplete="off"
+                spellCheck={false}
+                value={applicationId}
+                onChange={(e) => setApplicationId(e.target.value)}
+                placeholder="loan-app-2026-01"
+              />
+            </div>
+          </fieldset>
+        </div>
+
+        <div className="actions-line" style={{ marginTop: 16 }}>
           <button
+            type="button"
+            className="btn btn-primary"
             onClick={handleGenerate}
             disabled={!applicationIdValid}
           >
-            Generate proof locally
+            Generate proof
           </button>
           <button
-            className="ghost"
+            type="button"
+            className="btn btn-ghost"
             onClick={handlePrivacyCheck}
             disabled={!applicationIdValid}
           >
             Check privacy property
           </button>
           <button
-            className="ghost"
+            type="button"
+            className="btn btn-ghost"
             onClick={handleReplayCheck}
             disabled={!applicationIdValid}
           >
             Check replay protection
           </button>
         </div>
+        {!applicationIdValid && (
+          <p className="field-err" style={{ fontSize: 13, marginTop: 10 }}>
+            Enter an application ID to run the checks.
+          </p>
+        )}
       </section>
 
       {result && <ResultPanel result={result} />}
@@ -270,45 +344,50 @@ export function LocalDemo() {
       {sequence && <SequencePanel results={sequence} />}
 
       {privacy && (
-        <section className="card">
-          <h2>Privacy property check</h2>
-          <p className="step">
+        <section className="pane" style={{ marginTop: 16, maxWidth: 820 }}>
+          <div className="pane-head">
+            <h2 className="pane-title">Privacy property check</h2>
+            <span className="pane-kicker">Two incomes, one public record</span>
+          </div>
+          <p className="step" style={{ marginTop: 8 }}>
             Two different incomes (<strong>{privacy.incomeA.toString()}</strong>{' '}
             and <strong>{privacy.incomeB.toString()}</strong>) result in
             byte-identical <em>public</em> inputs:
           </p>
-          <dl className="hashes">
-            <dt>public-input hash (income {privacy.incomeA.toString()})</dt>
-            <dd>
-              <code>{privacy.hashA}</code>
-            </dd>
-            <dt>public-input hash (income {privacy.incomeB.toString()})</dt>
-            <dd>
-              <code>{privacy.hashB}</code>
-            </dd>
+          <dl className="kv">
+            <dt>Public-input hash</dt>
+            <dd className="hash-code">{privacy.hashA}</dd>
+            <dt>Public-input hash</dt>
+            <dd className="hash-code">{privacy.hashB}</dd>
           </dl>
-          <p className={privacy.equal ? 'ok' : 'err'}>
+          <p
+            className={`result-line ${privacy.equal ? '-good' : '-bad'}`}
+            style={{ marginTop: 12 }}
+          >
             {privacy.equal
-              ? '✓ Identical — the verifier cannot distinguish the two incomes.'
-              : '✗ Differ — that would be a privacy leak!'}
+              ? 'Identical — the verifier cannot tell the two incomes apart.'
+              : 'Differ — that would be a privacy leak!'}
           </p>
         </section>
       )}
 
-      <section className="card">
-        <h2>What is in the proof?</h2>
-        <div className="grid">
-          <div>
-            <h3>Public (visible to the verifier)</h3>
+      <section className="pane" style={{ marginTop: 16, maxWidth: 820 }}>
+        <div className="pane-head">
+          <h2 className="pane-title">What is in the proof?</h2>
+          <span className="pane-kicker">Public vs private</span>
+        </div>
+        <div className="demo-grid" style={{ marginTop: 14 }}>
+          <div className="why-item" style={{ border: 0, padding: 0, background: 'transparent' }}>
+            <h3>Public — visible to the verifier</h3>
             <ul>
               <li>Ledger state: <code>proofCount</code></li>
               <li>Circuit argument: <code>requiredMonthlyIncome</code></li>
               <li>Circuit argument: <code>applicationId</code></li>
-              <li>The zk proof + transcript</li>
+              <li>The zero-knowledge proof + transcript</li>
             </ul>
           </div>
-          <div>
-            <h3>Private (never leaves this tab)</h3>
+          <div className="why-item" style={{ border: 0, padding: 0, background: 'transparent' }}>
+            <h3>Private — never leaves this tab</h3>
             <ul>
               <li>The <code>income</code> witness</li>
               <li>The <code>applicantId</code> claim identity (fresh per proof)</li>
