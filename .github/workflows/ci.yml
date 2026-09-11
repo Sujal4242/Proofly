@@ -83,6 +83,12 @@ jobs:
       - name: Compile Compact contract (npm run compile)
         run: npm run compile
 
+      # Copies the compiled contract (index.js/index.d.ts) into
+      # frontend/src/compiled-contract.js and the ZK proving keys/zkIR into
+      # frontend/public/midnight/proofly so the frontend tests and build can run.
+      - name: Copy ZK assets and compiled contract into frontend (npm run copy-zk-assets)
+        run: npm run copy-zk-assets
+
       # ── Quality gates ──────────────────────────────────────────────────────
       - name: Run test suite (npm test)
         run: npm test
