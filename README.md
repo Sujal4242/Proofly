@@ -18,9 +18,41 @@ and a **Live Proof** against the deployed Proofly contract on Midnight Preprod.
 
 ---
 
-## Preview
+## Live Demo & Evidence
 
-> Live UI preview will be added with the final demo capture.
+The live deployment runs the final Level 3 Proofly contract on Midnight Preprod
+with the real **Lace** wallet connected — an applicant proves private income
+against a public threshold and every proof is verified on-chain.
+
+- **Live Demo**: <https://proofly-midnight.netlify.app/>
+- **Demo Video**: <https://youtu.be/5YH5ETNPBCU>
+
+The live deployment demonstrates:
+
+- **Private income verification against a public threshold** — the applicant proves `income ≥ threshold` without revealing the exact income.
+- **Successful on-chain proof submission** — the zero-knowledge proof is generated locally, submitted to the deployed contract, and verified on Midnight Preprod.
+- **Application-scoped replay protection** — every proof is bound to a public Application ID.
+- **Reuse of the same Application ID being rejected** — replay protection denies a second claim for an already-used Application ID.
+- **A different Application ID being accepted** — a different Application ID yields an independent, successful proof.
+- **Exact private income remaining undisclosed by the proof result** — the verification outcome and on-chain result expose only the public claim, never the income.
+
+### Live Screenshots
+
+![Live proof ready](docs/evidence/screenshots/01-live-proof-ready.jpeg)
+
+Live Preprod application with Lace connected and private/public inputs.
+
+![Proof accepted](docs/evidence/screenshots/02-proof-accepted.jpeg)
+
+Successful private income proof recorded on-chain.
+
+![Replay protection](docs/evidence/screenshots/03-replay-protection.jpeg)
+
+Reusing the same Application ID is rejected by replay protection.
+
+![Different application accepted](docs/evidence/screenshots/04-different-application.jpeg)
+
+A different Application ID can independently produce a successful proof.
 
 ---
 
