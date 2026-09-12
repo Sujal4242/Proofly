@@ -10,7 +10,7 @@ revealing the exact income to the verifier.
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178c6)
 ![React](https://img.shields.io/badge/React-61dafb)
 ![Vite](https://img.shields.io/badge/Vite-646cff)
-![Tests](https://img.shields.io/badge/tests-47%20passing-2ea44f)
+![Tests](https://img.shields.io/badge/tests-52%20passing-2ea44f)
 ![CI](https://github.com/Sujal4242/Proofly/actions/workflows/ci.yml/badge.svg)
 
 A single static React/Vite app runs two experiences: an offline **Local Demo**
@@ -195,9 +195,9 @@ all private inputs (income, identity) as zero-knowledge witnesses.
 | Component | Status |
 |---|---|
 | Contract — Level 3 (replay protection) | **Deployed** on Midnight Preprod — see [deployment evidence](docs/evidence/DEPLOYMENT.md) |
-| Test suite | **47/47 passing** across 8 files |
+| Test suite | **52/52 passing** across 8 files |
 | CI (GitHub Actions) | **Passing** — compile, test, type-check, build on every push/PR |
-| Static hosting (Netlify) | **Configured** (`netlify.toml`) — a live deployment is a deliberate operator action, not yet performed |
+| Static hosting (Netlify) | **Live** at <https://proofly-midnight.netlify.app/> — the static `frontend/dist` is published via `netlify.toml` |
 
 ## Getting started
 
@@ -218,7 +218,7 @@ never committed** — a fresh clone compiles the contract first:
 npm ci
 npm --prefix frontend ci
 npm run compile          # regenerates the gitignored managed artifacts
-npm test                 # 47 tests incl. a real Groth16 proof
+npm test                 # 52 tests incl. a real Groth16 proof
 npm run build            # TypeScript (tsc)
 npm run build:frontend   # production frontend build (Vite)
 npm run dev:frontend     # hot-reload dev server → http://localhost:5173
@@ -256,13 +256,14 @@ procedure.
 ## CI / static hosting
 
 - **GitHub Actions** (`.github/workflows/ci.yml`) validates every push and PR:
-  compile the contract, run all 47 tests, type-check, and build the production
+  compile the contract, run all 52 tests, type-check, and build the production
   frontend — on the pinned toolchain and Node 22. Read-only; no secrets.
   [`docs/CI-CD.md`](docs/CI-CD.md)
 - **Netlify** (`netlify.toml`) is the static **build/publish** pipeline (CI is
   the validation pipeline — Netlify does not re-run the full test suite). It
   bakes in the public `VITE_*` values and publishes `frontend/dist`.
-  Configured and committed; not yet live. [`docs/STATIC-HOSTING.md`](docs/STATIC-HOSTING.md)
+  Live — published from `frontend/dist` at <https://proofly-midnight.netlify.app/>.
+  [`docs/STATIC-HOSTING.md`](docs/STATIC-HOSTING.md)
 
 ## Documentation
 
@@ -277,7 +278,7 @@ procedure.
 ```
 contracts/proofly.compact                 ← the Compact contract (source of truth)
 scripts/                                  ← compile guard, deploy tooling
-tests/                                    ← 47 tests: contract, privacy, nullifier, frontend
+tests/                                    ← 52 tests: contract, privacy, nullifier, frontend
 frontend/                                 ← static Vite/React app
   src/midnight/witnesses.ts               ← the privacy boundary (income + identity witnesses)
   src/midnight/contract-service.ts        ← proof call + deterministic preflight
