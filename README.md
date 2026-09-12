@@ -40,7 +40,7 @@ The live deployment demonstrates:
 
 ![Live proof ready](docs/evidence/screenshots/01-live-proof-ready.jpeg)
 
-Live Preprod application with Lace connected and private/public inputs.
+Live Preprod application with 1AM connected and private/public inputs.
 
 ![Proof accepted](docs/evidence/screenshots/02-proof-accepted.jpeg)
 
