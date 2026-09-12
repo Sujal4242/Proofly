@@ -26,6 +26,7 @@ against a public threshold and every proof is verified on-chain.
 
 - **Live Demo**: <https://proofly-midnight.netlify.app/>
 - **Demo Video**: <https://youtu.be/5YH5ETNPBCU>
+- **Product X**: <https://x.com/ProoflyMidnight>
 
 The live deployment demonstrates:
 
