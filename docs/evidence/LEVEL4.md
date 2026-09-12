@@ -83,9 +83,9 @@ verifiable facts: repository files, on-chain deployment identifiers recorded in
   **no deployments**.
 - **Verified passing run (read-only inspection of the project's GitHub Actions
   on 2026-09-12):**
-  - Commit: `48fcb47681606c2280082e414ce4d8fbbd4155ed`
-    (`docs: fix Lace screenshot caption`)
-  - GitHub Actions run `34686026099` (run **#13**) — **status `completed`,
+  - Commit: `e0ed0f8fd6485481815e34fad139b9c433833c5c`
+    (`docs: record Product X profile evidence`)
+  - GitHub Actions run `34689151329` (run **#16**) — **status `completed`,
     conclusion `success`**; job `compile-test-build` passed.
   - Prior runs (#9–#12) also completed with `success`.
 - **CI badge** present in README:
@@ -118,9 +118,9 @@ verifiable facts: repository files, on-chain deployment identifiers recorded in
   - `02-proof-accepted.jpeg` — a private income proof recorded on-chain.
   - `03-replay-protection.jpeg` — reusing the same Application ID is rejected.
   - `04-different-application.jpeg` — a different Application ID is accepted.
-- **Minimum 15 meaningful commits:** the project's `main` branch has **18
-  commits** (all substantive feature/CI/documentation work; no no-op commits),
-  satisfying the ≥15 threshold.
+- **Minimum 15 meaningful commits:** the project's `main` branch has **21
+  meaningful commits** (all substantive feature/CI/documentation work; no no-op
+  commits), satisfying the ≥15 threshold.
 
 ---
 
@@ -170,10 +170,10 @@ The current config surfaces reference the **current** address:
 |---|---|---|
 | Public GitHub repository with full documentation | **COMPLETE** | `Sujal4242/Proofly`, README + `docs/` |
 | Live Preprod demo link + contract address | **COMPLETE** | Live site + Requirement 6 |
-| CI/CD badge OR workflow file with passing runs | **COMPLETE** | `ci.yml`, run #13 success |
+| CI/CD badge OR workflow file with passing runs | **COMPLETE** | `ci.yml`, run #16 success |
 | Link to Product X profile | **COMPLETE** | <https://x.com/ProoflyMidnight> linked from README |
 | Demo video of MVP | **COMPLETE** | <https://youtu.be/5YH5ETNPBCU> |
-| Minimum 15 meaningful commits | **COMPLETE** | 18 commits on `main` |
+| Minimum 15 meaningful commits | **COMPLETE** | 21 commits on `main` |
 
 ---
 
