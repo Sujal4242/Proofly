@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import {
   runProofOfIncome,
   runClaimSequence,
-  type ClaimInput,
   type ProofResult,
 } from '../proofly/local-circuit.js';
 import { isValidApplicationId } from '../midnight/application-id.js';
@@ -76,7 +75,7 @@ function ResultPanel({ result }: { result: ProofResult }) {
         <p className="verdict-body">
           {result.reason}{' '}
           {replay
-            ? '— the per-claim identity re-used the same application'
+            ? '— this application has already been claimed'
             : below
               ? '— asserted locally with "Income below required minimum"'
               : ''}
@@ -100,12 +99,14 @@ function SequencePanel({ results }: { results: ProofResult[] }) {
     <section className="pane">
       <div className="pane-head">
         <h2 className="pane-title">Replay protection &amp; cross-application check</h2>
-        <span className="pane-kicker">Same identity</span>
+        <span className="pane-kicker">Application-scoped claims</span>
       </div>
       <p className="step">
-        All claims share <strong>one per-claim identity</strong> (held fixed,
-        in-memory only). The second claim with the same application ID is
-        denied; switching to a different application ID succeeds.
+        The Application ID is the claim unit — one claim per application. The
+        three claims below run against a single accumulated state: the first
+        claim for application A is accepted, a second claim for the SAME
+        application A is denied (changing the threshold does not reset the
+        application), and a claim for a different application B succeeds.
       </p>
       <dl className="kv" style={{ marginTop: 10 }}>
         <dt>Accepted</dt>
@@ -135,9 +136,11 @@ function SequencePanel({ results }: { results: ProofResult[] }) {
         ))}
       </ol>
       <p className="privacy-note">
-        This mirrors the contract-level replay tests using one fixed applicant
-        identity across claims. In Live mode each claim generates a fresh
-        identity per call; only contract-level replay is observable there.
+        The replay denial comes from the real contract ledger: the nullifier is
+        derived from <code>applicationId</code> alone, so the same application
+        is denied on-chain regardless of income or threshold. The same
+        application-scoped semantics apply in Live mode via the preflight and
+        the on-chain ledger — no identity is generated or persisted anywhere.
       </p>
     </section>
   );
@@ -196,27 +199,31 @@ export function LocalDemo() {
   };
 
   /**
-   * Demonstrate replay protection and cross-application independence by
-   * claiming two different application IDs then re-claiming the first,
-   * all under the SAME per-claim identity (held in-memory for this
-   * demonstration only, matching the contract tests).
+   * Demonstrate application-scoped replay protection against ONE accumulated
+   * on-chain state:
+   *   1. claim application A → ACCEPTED;
+   *   2. re-claim application A (with a different threshold that still passes)
+   *      → DENIED as replay, proving the threshold cannot reset an application;
+   *   3. claim a different application B → ACCEPTED (independent claim).
+   * No identity is generated or threaded — the nullifier is derived purely
+   * from `applicationId`, so the same application always replays regardless of
+   * income or threshold.
    */
   const handleReplayCheck = () => {
     const appId = applicationId.trim();
     const altAppId = `${appId}-alt`;
-    const identity = crypto.getRandomValues(new Uint8Array(32));
-    const claimInput: ClaimInput = {
-      privateIncome: income,
-      requiredIncome: threshold,
-      applicationId: appId,
-    };
-    const altClaimInput: ClaimInput = {
-      privateIncome: income,
-      requiredIncome: threshold,
-      applicationId: altAppId,
-    };
+    const changedThreshold =
+      income > threshold && threshold > 0n ? threshold - 1n : threshold;
     setSequence(
-      runClaimSequence([claimInput, altClaimInput, claimInput], identity),
+      runClaimSequence([
+        { privateIncome: income, requiredIncome: threshold, applicationId: appId },
+        {
+          privateIncome: income,
+          requiredIncome: changedThreshold,
+          applicationId: appId,
+        },
+        { privateIncome: income, requiredIncome: threshold, applicationId: altAppId },
+      ]),
     );
   };
 
@@ -383,6 +390,7 @@ export function LocalDemo() {
               <li>Ledger state: <code>proofCount</code></li>
               <li>Circuit argument: <code>requiredMonthlyIncome</code></li>
               <li>Circuit argument: <code>applicationId</code></li>
+              <li>Disclosed nullifier from <code>applicationId</code> (one claim per application)</li>
               <li>The zero-knowledge proof + transcript</li>
             </ul>
           </div>
@@ -390,7 +398,7 @@ export function LocalDemo() {
             <h3>Private — never leaves this tab</h3>
             <ul>
               <li>The <code>income</code> witness</li>
-              <li>The <code>applicantId</code> claim identity (fresh per proof)</li>
+              <li>No applicant identity is used — nothing personal distinguishes claims</li>
               <li>Not logged, not stored, not sent anywhere</li>
               <li>Absent from the public transcript</li>
             </ul>

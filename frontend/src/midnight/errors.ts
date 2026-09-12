@@ -6,7 +6,7 @@
  * The circuit assertion failures — `Income below required minimum` and
  * `Claim already used for this application` — are *local* failures raised
  * during proof generation, BEFORE any transaction is submitted, so the private
- * income and claim identity never leave the prover. They must surface as
+ * income never leaves the prover. They must surface as
  * `denied`. Wallet/funds/network problems must surface as `error`.
  *
  * The ladder is never inferred from wrapping text. Only the EXACT circuit

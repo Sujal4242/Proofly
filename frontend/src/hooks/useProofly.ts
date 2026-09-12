@@ -6,20 +6,21 @@
  * ledger decoder. No transaction is ever submitted unless `VITE_CONTRACT_ADDRESS`
  * is configured AND `findProoflyContract` resolves to a deployed contract.
  *
- * The exact monthly income AND a fresh per-claim applicant id are bound into the
- * witness closure exclusively — they are never logged, never shown in
- * `tx.public`, and never placed anywhere outside the local proof generation.
- * The `applicationId` is a PUBLIC claim-scoping input supplied by the caller.
+ * The exact monthly income is bound into the witness closure exclusively — it
+ * is never logged, never shown in `tx.public`, and never placed anywhere
+ * outside the local proof generation. The `applicationId` is a PUBLIC
+ * claim-scoping input supplied by the caller.
  *
  * Before the wallet/proving service is contacted, a LOCAL unproven circuit
  * preflight (`preflightProveIncome`) runs the same circuit against the current
- * on-chain ledger. Deterministic denials (income below threshold, exact replay
- * of the same income + applicationId + applicantId) surface as
- * `Proof denied — <assertion>` and the wallet is never asked to prove them.
- * Generic preflight failures (indexer/decode) are non-fatal: the real wallet
- * flow still runs, so wallet/network/prover errors keep their existing
- * classification. A fresh applicantId per claim means a claim on the same
- * application remains valid — only an exact triple replay is denied.
+ * on-chain ledger. Deterministic denials (income below threshold, a claim for
+ * an already-used application) surface as `Proof denied — <assertion>` and the
+ * wallet is never asked to prove them. Generic preflight failures
+ * (indexer/decode) are non-fatal: the real wallet flow still runs, so
+ * wallet/network/prover errors keep their existing classification. Because the
+ * nullifier is scoped to `applicationId` alone, every claim for the same
+ * application reuses the same nullifier and is denied on-chain — making each
+ * Application ID single-use.
  */
 
 import { useCallback, useState } from 'react';
@@ -60,9 +61,8 @@ export function useProofly() {
   /**
    * Prove income >= threshold for a PUBLIC application on Preprod.
    *
-   * A fresh `applicantId` (32 bytes, `crypto.getRandomValues`) is generated
-   * per claim and bound into the witness closure — it is in-memory only, never
-   * stored, displayed, or sent anywhere.
+   * The exact income is bound into the witness closure as the ONLY private
+   * input — it is in-memory only, never stored, displayed, or sent anywhere.
    *
    * A local unproven-circuit preflight runs first (see module doc); a
    * deterministic denial short-circuits to `denied` before the wallet is asked
@@ -85,17 +85,14 @@ export function useProofly() {
     ) => {
       setVerification({ state: 'generating' });
       try {
-        // Fresh claim identity for THIS run's proof (never persisted).
-        const applicantId = crypto.getRandomValues(new Uint8Array(32));
-
         // Local unproven-circuit preflight against the CURRENT on-chain ledger.
-        // Deterministic denials (below-threshold, exact replay of the same
-        // income + applicationId + applicantId) are shown as
-        // `Proof denied — <assertion>` WITHOUT contacting the wallet/prover.
-        // Generic preflight failures (indexer/decode) are non-fatal — the real
-        // wallet flow below stays authoritative for proving/network errors.
+        // Deterministic denials (below-threshold, a claim for an already-used
+        // application) are shown as `Proof denied — <assertion>` WITHOUT
+        // contacting the wallet/prover. Generic preflight failures
+        // (indexer/decode) are non-fatal — the real wallet flow below stays
+        // authoritative for proving/network errors.
         try {
-          await preflightProveIncome(income, threshold, applicationId, applicantId, providers);
+          await preflightProveIncome(income, threshold, applicationId, providers);
         } catch (preflightErr) {
           const verdict = classifyError(preflightErr);
           if (verdict.state === 'denied') {
@@ -108,14 +105,10 @@ export function useProofly() {
           );
         }
 
-        // Rebinds the income + applicant id witnesses to THIS run's values
-        // (Level5 pattern) and fetches the current public contract state.
+        // Rebinds the income witness to THIS run's value (Level5 pattern) and
+        // fetches the current public contract state.
         setVerification({ state: 'awaiting-wallet' });
-        const deployed: DeployedContract = await findProoflyContract(
-          providers,
-          income,
-          applicantId,
-        );
+        const deployed: DeployedContract = await findProoflyContract(providers, income);
 
         // Generates the proof, requests wallet approval, signs, submits, and
         // waits for confirmation. `applicationId` is a public circuit argument.

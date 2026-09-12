@@ -5,9 +5,10 @@
  * + `frontend/src/midnight/application-id.ts`), that:
  *   1. the free-form `applicationId` encodes to exactly 32 bytes
  *      (Compact `pad(32, str)` semantics) and is rejected when blank;
- *   2. `runClaimSequence` — holding ONE in-memory claim identity — denies a
- *      repeated `applicationId` as `replay`, allows different application ids,
- *      and keeps the exact threshold/incomes flowing to the circuit;
+ *   2. `runClaimSequence` — against ONE accumulated state, no identity — denies
+ *      a repeated `applicationId` as `replay` regardless of threshold, allows
+ *      different application ids, and keeps the exact threshold/incomes flowing
+ *      to the circuit;
  *   3. `runProofOfIncome` classifies a sub-threshold run as `below-threshold`.
  *
  * Runs completely offline in this vitest environment. The public inputs are
@@ -24,9 +25,6 @@ import {
   runProofOfIncome,
 } from '../frontend/src/proofly/local-circuit.js';
 import { INCOME_DENIED_MESSAGE, REPLAY_DENIED_MESSAGE } from '../frontend/src/midnight/errors.js';
-
-/** One fixed in-memory claim identity for the replay scenarios (mirrors the contract tests). */
-const IDENTITY = new Uint8Array(32).fill(0x42);
 
 describe('applicationId public input encoding', () => {
   it('encodes ASCII text to exactly 32 zero-padded bytes', () => {
@@ -50,31 +48,37 @@ describe('applicationId public input encoding', () => {
   });
 });
 
-describe('runClaimSequence — Level 3 replay + cross-application behavior', () => {
-  it('rejects a repeated applicationId for the same claim identity as replay', () => {
-    const results = runClaimSequence(
-      [
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
-      ],
-      IDENTITY,
-    );
+describe('runClaimSequence — application-scoped replay + cross-application behavior', () => {
+  it('HEADLINE: the same Application ID is single-use even when the threshold changes', () => {
+    const results = runClaimSequence([
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
+      { privateIncome: 82_500n, requiredIncome: 40_000n, applicationId: 'app-A' },
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-B' },
+    ]);
 
+    // 1. First claim for application A → accepted (proofCount = 1).
     expect(results[0].outcome).toBe('accepted');
+    expect(results[0].proofCountAfter).toBe(1n);
+
+    // 2. Second claim for SAME application A, with a LOWER (still passing)
+    //    threshold → replay denied, ledger untouched.
     expect(results[1].outcome).toBe('rejected');
     expect(results[1].rejectedAs).toBe('replay');
     expect(results[1].reason).toContain(REPLAY_DENIED_MESSAGE);
+    expect(results[1].proofCountAfter).toBeUndefined();
+
+    // 3. Different application B → accepted; the denied replay did not consume
+    //    a counter slot, so proofCount advances 1 → 2 (not 3).
+    expect(results[2].outcome).toBe('accepted');
+    expect(results[2].proofCountAfter).toBe(2n);
   });
 
-  it('allows independent claims for different applicationIds under one identity', () => {
-    const results = runClaimSequence(
-      [
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-B' },
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-C' },
-      ],
-      IDENTITY,
-    );
+  it('allows independent claims for different applicationIds', () => {
+    const results = runClaimSequence([
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-B' },
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-C' },
+    ]);
 
     expect(results.every((r) => r.outcome === 'accepted')).toBe(true);
     expect(results.map((r) => r.proofCountAfter)).toEqual([1n, 2n, 3n]);
@@ -82,13 +86,10 @@ describe('runClaimSequence — Level 3 replay + cross-application behavior', () 
   });
 
   it('a sub-threshold rerun of the same application is reported as below-threshold, not replay', () => {
-    const results = runClaimSequence(
-      [
-        { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
-        { privateIncome: 20_000n, requiredIncome: 50_000n, applicationId: 'app-A' },
-      ],
-      IDENTITY,
-    );
+    const results = runClaimSequence([
+      { privateIncome: 82_500n, requiredIncome: 50_000n, applicationId: 'app-A' },
+      { privateIncome: 20_000n, requiredIncome: 50_000n, applicationId: 'app-A' },
+    ]);
 
     expect(results[0].outcome).toBe('accepted');
     expect(results[1].outcome).toBe('rejected');

@@ -3,8 +3,9 @@
  *
  * THE core requirement: the exact private income must never be exposed.
  * These tests assert, against the real compiled circuit:
- *   1. the public circuit transcript contains no trace of the income (and no
- *      trace of the applicant id witness);
+ *   1. the public circuit transcript contains no trace of the income (there is
+ *      no applicant id witness at all anymore — income() is the only private
+ *      witness);
  *   2. the PUBLIC INPUT bytes of the proof depend only on public values
  *      (threshold + ledger + application id) — two runs with different private
  *      incomes and the same threshold produce byte-identical public input,
@@ -23,13 +24,10 @@ import {
   initializeContract,
   readLedger,
   setUpRuntime,
-  toHex,
   type DeployedRuntime,
 } from './helpers.js';
 
 const APP_A = bytes32(0x01);
-const APP_ID_SECRET = bytes32(0xab);
-const APP_ID_SECRET_HEX = toHex(APP_ID_SECRET);
 
 describe('Proofly privacy: the exact income stays private', () => {
   const ctx = {} as DeployedRuntime;
@@ -49,7 +47,6 @@ describe('Proofly privacy: the exact income stays private', () => {
   function runProgram(income: bigint, threshold: bigint, applicationId: Uint8Array = APP_A) {
     const contract = new ctx.contractModule.Contract({
       income: (x: any) => [x.privateState, income],
-      applicantId: (x: any) => [x.privateState, APP_ID_SECRET],
     });
     const initial = contract.initialState(
       ocrt.createConstructorContext({}, ctx.encodedCoinPublicKey),
@@ -70,13 +67,12 @@ describe('Proofly privacy: the exact income stays private', () => {
     );
   }
 
-  it('keeps the income and the applicant id out of the public circuit transcript', async () => {
-    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n, APP_A, APP_ID_SECRET);
+  it('keeps the income out of the public circuit transcript', async () => {
+    const callResult = await callProveIncome(ctx, deployed, 82_500n, 50_000n, APP_A);
 
     for (const field of ['publicTranscript', 'partitionedTranscript']) {
       const json = safeJson((callResult.public as Record<string, unknown>)[field]);
       expect(json).not.toContain('82500');
-      expect(json).not.toContain(APP_ID_SECRET_HEX);
     }
 
     // The circuit produces no public outputs at all.

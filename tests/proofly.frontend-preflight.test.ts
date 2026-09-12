@@ -6,12 +6,14 @@
  * deterministic denials BEFORE the wallet/proving service is contacted.
  *
  *   - income below `requiredMonthlyIncome`  → exact "Income below required minimum"
- *   - exact replay of (income, applicationId, applicantId) → exact
- *     "Claim already used for this application"
- *   - fresh applicantId on the same application → still valid
+ *   - a SECOND claim for the SAME application → exact
+ *     "Claim already used for this application", classified as `replay`
+ *   - the same application with a DIFFERENT (still passing) threshold → still
+ *     replay denied (the Application ID is single-use regardless of threshold)
+ *   - a DIFFERENT application stays independently claimable
  *
- * No wallets, no chains, no localStorage/sessionStorage, and no income or
- * applicantId may ever be logged, persisted, or leaked into messages.
+ * No wallets, no chains, no localStorage/sessionStorage, and no income may ever
+ * be logged, persisted, or leaked into messages.
  *
  * State is supplied through a fake `publicDataProvider` returning states built
  * with the REAL compiled circuit (fresh deployment state / state after a claim),
@@ -65,7 +67,7 @@ const KEY: ocrt.EncodedCoinPublicKey = {
 
 /** Fresh deployment ledger state (empty usedNullifiers, proofCount 0). */
 function freshState(): ocrt.ChargedState {
-  const contract = new Contract(createProoflyWitnesses<{}>(0n, new Uint8Array(32)));
+  const contract = new Contract(createProoflyWitnesses<{}>(0n));
   return contract.initialState(ocrt.createConstructorContext({}, KEY)).currentContractState
     .data;
 }
@@ -75,9 +77,8 @@ function stateAfterClaim(
   privateIncome: bigint,
   requiredIncome: bigint,
   applicationId: string,
-  applicantId: Uint8Array,
 ): ocrt.ChargedState {
-  const contract = new Contract(createProoflyWitnesses<{}>(privateIncome, applicantId));
+  const contract = new Contract(createProoflyWitnesses<{}>(privateIncome));
   const initial = contract.initialState(ocrt.createConstructorContext({}, KEY));
   const context = ocrt.createCircuitContext(
     ocrt.dummyContractAddress(),
@@ -98,14 +99,13 @@ function preflightWith(
   income: bigint,
   threshold: bigint,
   applicationId: string,
-  applicantId: Uint8Array,
 ) {
   const providers = {
     publicDataProvider: {
       queryContractState: async () => ({ data: state } as unknown as ocrt.ContractState),
     },
-  } as unknown as Parameters<typeof preflightProveIncome>[4];
-  return preflightProveIncome(income, threshold, applicationId, applicantId, providers);
+  } as unknown as Parameters<typeof preflightProveIncome>[3];
+  return preflightProveIncome(income, threshold, applicationId, providers);
 }
 
 function capturePreflight(
@@ -113,9 +113,8 @@ function capturePreflight(
   income: bigint,
   threshold: bigint,
   applicationId: string,
-  applicantId: Uint8Array,
 ): Promise<Error> {
-  return preflightWith(state, income, threshold, applicationId, applicantId).then(
+  return preflightWith(state, income, threshold, applicationId).then(
     () => new Error(`expected a deterministic denial, got acceptance for ${applicationId}`),
     (err: unknown) => (err instanceof Error ? err : new Error(String(err))),
   );
@@ -128,28 +127,14 @@ function denialMessage(verdict: ReturnType<typeof classifyError>): string {
 }
 
 describe('Proofly live preflight (unproven local circuit)', () => {
-  it('accepts a valid claim on a fresh deployment (proofCount → 1)', async () => {
-    const applicantId = new Uint8Array(32).fill(0x11);
-    const res = await preflightWith(
-      freshState(),
-      82_500n,
-      50_000n,
-      'loan-app-2026-01',
-      applicantId,
-    );
+  it('accepts the FIRST claim for application A on a fresh deployment (proofCount → 1)', async () => {
+    const res = await preflightWith(freshState(), 82_500n, 50_000n, 'app-A');
     expect(res.outcome).toBe('accepted');
     expect(res.proofCountAfter).toBe(1n);
   });
 
   it('denies income below the threshold with the EXACT surfaced message', async () => {
-    const applicantId = new Uint8Array(32).fill(0x22);
-    const err = await capturePreflight(
-      freshState(),
-      10_000n,
-      50_000n,
-      'app-below',
-      applicantId,
-    );
+    const err = await capturePreflight(freshState(), 10_000n, 50_000n, 'app-below');
     expect(err.message).toContain(INCOME_DENIED_MESSAGE);
     const verdict = classifyError(err);
     expect(verdict.state).toBe('denied');
@@ -158,17 +143,25 @@ describe('Proofly live preflight (unproven local circuit)', () => {
     );
   });
 
-  it('denies an EXACT replay: same income, applicationId and applicantId', async () => {
-    const applicantId = new Uint8Array(32).fill(0x33);
-    const claimedState = stateAfterClaim(82_500n, 50_000n, 'app-replay', applicantId);
+  it('denies a SECOND claim for the SAME application A as replay', async () => {
+    const claimedState = stateAfterClaim(82_500n, 50_000n, 'app-A');
 
-    const err = await capturePreflight(
-      claimedState,
-      82_500n,
-      50_000n,
-      'app-replay',
-      applicantId,
+    const err = await capturePreflight(claimedState, 82_500n, 50_000n, 'app-A');
+    expect(err.message).toContain(REPLAY_DENIED_MESSAGE);
+    const verdict = classifyError(err);
+    expect(verdict.state).toBe('denied');
+    expect(verdict.state === 'denied' && verdict.message).toBe(REPLAY_DENIED_MESSAGE);
+    expect(formatDenialMessage(denialMessage(verdict))).toBe(
+      'Proof denied — Claim already used for this application',
     );
+  });
+
+  it('denies the SAME application A with a DIFFERENT (still passing) threshold as replay too', async () => {
+    const claimedState = stateAfterClaim(82_500n, 50_000n, 'app-A');
+
+    // Lower threshold still passes the income assertion (82500 >= 40000), so
+    // the ONLY failing assertion can be the application-scoped nullifier one.
+    const err = await capturePreflight(claimedState, 82_500n, 40_000n, 'app-A');
     expect(err.message).toContain(REPLAY_DENIED_MESSAGE);
     const verdict = classifyError(err);
     expect(verdict.state).toBe('denied');
@@ -177,23 +170,15 @@ describe('Proofly live preflight (unproven local circuit)', () => {
     );
   });
 
-  it('still accepts a FRESH applicantId on the same application (not a replay)', async () => {
-    const firstApplicant = new Uint8Array(32).fill(0x33);
-    const secondApplicant = new Uint8Array(32).fill(0x44);
-    const claimedState = stateAfterClaim(82_500n, 50_000n, 'app-replay', firstApplicant);
+  it('still accepts a DIFFERENT application B after A is claimed (cross-application independence)', async () => {
+    const claimedState = stateAfterClaim(82_500n, 50_000n, 'app-A');
 
-    const res = await preflightWith(
-      claimedState,
-      82_500n,
-      50_000n,
-      'app-replay',
-      secondApplicant,
-    );
+    const res = await preflightWith(claimedState, 82_500n, 50_000n, 'app-B');
     expect(res.outcome).toBe('accepted');
     expect(res.proofCountAfter).toBe(2n);
   });
 
-  it('never logs income/applicantId and never touches browser storage', async () => {
+  it('never logs income and never touches browser storage', async () => {
     const saved = {
       log: console.log,
       info: console.info,
@@ -207,23 +192,17 @@ describe('Proofly live preflight (unproven local circuit)', () => {
     console.error = (...a: unknown[]) => calls.push(a);
 
     try {
-      const applicantId = new Uint8Array(32).fill(0x55);
-      await preflightWith(freshState(), 82_500n, 50_000n, 'app-silent', applicantId);
+      await preflightWith(freshState(), 82_500n, 50_000n, 'app-silent');
       const err = await capturePreflight(
-        stateAfterClaim(82_500n, 50_000n, 'app-silent', applicantId),
+        stateAfterClaim(82_500n, 50_000n, 'app-silent'),
         82_500n,
         50_000n,
         'app-silent',
-        applicantId,
       );
 
       expect(calls.length).toBe(0);
 
-      const applicantHex = Array.from(applicantId)
-        .map((b) => b.toString(16).padStart(2, '0'))
-        .join('');
       const joined = [err.message, err.stack ?? ''].join('\n');
-      expect(joined).not.toContain(applicantHex);
       expect(joined).not.toContain('82500');
       expect(joined).not.toContain('app-silent');
     } finally {

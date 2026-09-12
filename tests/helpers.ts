@@ -49,10 +49,6 @@ export const CIRCUIT_ID = CompactJS.ProvableCircuitId<ProoflyContract.Contract<a
 /** Opaque location string embedded in the preimage (matches the key files). */
 export const KEY_LOCATION = 'proofly/proveIncome';
 
-export function random32(): Uint8Array {
-  return crypto.getRandomValues(new Uint8Array(32));
-}
-
 /** Deterministic 32-byte fill value (test-only; NOT a secret). */
 export function bytes32(fill: number): Uint8Array {
   return new Uint8Array(32).fill(fill);
@@ -94,31 +90,28 @@ export function makeKeyMaterialProvider(): zkirV2.KeyMaterialProvider {
 }
 
 /**
- * Build the compiled contract with the given private income and applicant id
- * wired through their WITNESSES — neither is ever a circuit argument.
+ * Build the compiled contract with the given private income wired through the
+ * `income` WITNESS — it is never a circuit argument.
  */
 export function makeCompiledContract(
   income: bigint,
-  applicantId: Uint8Array,
   Contract: typeof ProoflyContract.Contract,
 ) {
   const compiled = CompactJS.CompiledContract.make('proofly', Contract).pipe(
     CompactJS.CompiledContract.withWitnesses({
       income: (ctx: any) => [ctx.privateState, income],
-      applicantId: (ctx: any) => [ctx.privateState, applicantId],
     } as any),
     CompactJS.CompiledContract.withCompiledFileAssets(ASSETS_DIR),
   );
   return compiled as any;
 }
 
-/** Contract executable bound to a specific private income + applicant id (witnesses). */
+/** Contract executable bound to a specific private income (witness). */
 export function makeExecutable(
   income: bigint,
-  applicantId: Uint8Array,
   Contract: typeof ProoflyContract.Contract,
 ) {
-  return CompactJS.ContractExecutable.make(makeCompiledContract(income, applicantId, Contract));
+  return CompactJS.ContractExecutable.make(makeCompiledContract(income, Contract));
 }
 
 export interface DeployedRuntime {
@@ -155,7 +148,7 @@ export async function setUpRuntime(): Promise<DeployedRuntime> {
 export async function initializeContract(
   ctx: DeployedRuntime,
 ): Promise<Awaited<ReturnType<ContractExecutable<any, any, any, any>['initialize']>>> {
-  const executable = makeExecutable(1n, bytes32(0x11), ctx.contractModule.Contract);
+  const executable = makeExecutable(1n, ctx.contractModule.Contract);
   return ctx.runtime.runPromise(executable.initialize({}));
 }
 
@@ -166,9 +159,8 @@ export async function callProveIncome(
   income: bigint,
   requiredMonthlyIncome: bigint,
   applicationId: Uint8Array,
-  applicantId: Uint8Array,
 ) {
-  const executable = makeExecutable(income, applicantId, ctx.contractModule.Contract);
+  const executable = makeExecutable(income, ctx.contractModule.Contract);
   return ctx.runtime.runPromise(
     executable.circuit(
       CIRCUIT_ID,

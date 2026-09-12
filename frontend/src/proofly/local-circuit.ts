@@ -46,23 +46,25 @@ const encodedCoinPublicKey: ocrt.EncodedCoinPublicKey = {
 /**
  * Run one `proveIncome` circuit execution.
  *
- * `privateIncome` and `applicantId` are passed straight into their WITNESSES
- * and never leave this page: they are not part of the public transcript, the
- * preimage, or any network/console/log/storage call. `state` is the accumulated
- * exported-ledger state to prove against (null for a fresh deployment).
+ * `privateIncome` is passed straight into its WITNESS and never leaves this
+ * page: it is not part of the public transcript, the preimage, or any
+ * network/console/log/storage call. The nullifier is application-scoped
+ * (`persistentHash(["proofly:claim:", applicationId])`), so the same
+ * `applicationId` always produces the same nullifier regardless of income or
+ * threshold — that is what makes an Application ID single-use. `state` is the
+ * accumulated exported-ledger state to prove against (null for a fresh
+ * deployment).
  */
 function runProve(
   state: LedgerState | null,
   privateIncome: bigint,
   requiredIncome: bigint,
   applicationId: string,
-  applicantId: Uint8Array,
 ): { result: ProofResult; nextState: LedgerState | null } {
   const t0 = performance.now();
   const appIdBytes = encodeApplicationId(applicationId);
   const contract = new Contract({
     income: (ctx: ocrt.WitnessContext<never, any>) => [ctx.privateState, privateIncome],
-    applicantId: (ctx: ocrt.WitnessContext<never, any>) => [ctx.privateState, applicantId],
   });
 
   const initial = contract.initialState(
@@ -129,32 +131,26 @@ function runProve(
 
 /**
  * Single, independent proof run (Level 1 experience): always proved against a
- * FRESH deployment state so repeated runs are directly comparable. A fresh
- * `applicantId` is generated per call unless an override is supplied.
+ * FRESH deployment state so repeated runs are directly comparable.
  */
 export function runProofOfIncome(
   privateIncome: bigint,
   requiredIncome: bigint,
   applicationId: string,
-  applicantIdOverride?: Uint8Array,
 ): ProofResult {
-  const applicantId = applicantIdOverride ?? crypto.getRandomValues(new Uint8Array(32));
-  return runProve(null, privateIncome, requiredIncome, applicationId, applicantId).result;
+  return runProve(null, privateIncome, requiredIncome, applicationId).result;
 }
 
 /**
- * Run a SEQUENCE of claims against ONE accumulated on-chain state, all sharing
- * the given `applicantId` claim identity. This is what makes replay-protection
- * observable in the tab:
- *   - repeating the same `applicationId` → REJECTED as `replay`;
+ * Run a SEQUENCE of claims against ONE accumulated on-chain state. Because the
+ * nullifier is scoped to `applicationId` alone, this exercises the real
+ * application-scoped replay semantics:
+ *   - repeating the same `applicationId` → REJECTED as `replay`
+ *     ("Claim already used for this application"), even with a different
+ *     threshold or income — the application, not the inputs, is the claim unit;
  *   - switching to a different `applicationId` → ACCEPTED (independent claim).
- * The identity is supplied by the caller (in-memory only), mirroring how the
- * contract tests hold one identity across a scenario.
  */
-export function runClaimSequence(
-  claims: ClaimInput[],
-  applicantId: Uint8Array,
-): ProofResult[] {
+export function runClaimSequence(claims: ClaimInput[]): ProofResult[] {
   let state: LedgerState | null = null;
   return claims.map((claim) => {
     const { result, nextState } = runProve(
@@ -162,7 +158,6 @@ export function runClaimSequence(
       claim.privateIncome,
       claim.requiredIncome,
       claim.applicationId,
-      applicantId,
     );
     state = nextState;
     return result;

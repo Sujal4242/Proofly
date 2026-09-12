@@ -3,8 +3,9 @@
  *
  * `applicationId` is a PUBLIC claim-scoping input provided by the caller (the
  * verifier/issuer of the application, re-used across attempts for the same
- * application). It is totally separate from the private `applicantId` claim
- * identity that is generated in-memory per claim.
+ * application). It is the ONLY input to the on-chain nullifier — each
+ * Application ID is single-use, regardless of threshold or income. There is no
+ * private applicant identity.
  *
  * The circuit expects a fixed 32-byte `Bytes<32>` argument; free-form text is
  * encoded to exactly 32 bytes by UTF-8 + zero padding — the same bytes Compact's

@@ -11,10 +11,10 @@ import CompactStandardLibrary;
 //
 // Level 3: each claim is scoped to a public `applicationId` and made
 // single-use via a deterministic, income-independent nullifier
-// persistentHash(["proofly:claim:", applicationId, requiredMonthlyIncome,
-// applicantId]). The nullifier is derived from the private `applicantId`
-// witness (unrelated to income) and is recorded on-chain once; a replayed
-// claim is rejected in-chain.
+// persistentHash(["proofly:claim:", applicationId]). A second claim for the
+// same `applicationId` produces the same nullifier and is rejected in-chain,
+// regardless of income or threshold. The exact income remains a private
+// witness and never enters the nullifier or any public state.
 //
 // Deliberately minimal: no applicant ids, no Merkle allowlists, no issuer,
 // no revocation. Identity, issuer and revocation are later levels.
@@ -27,16 +27,13 @@ constructor() {
 }
 
 witness income(): Uint<32>;
-witness applicantId(): Bytes<32>;
 
 export circuit proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>): [] {
   const privateIncome = income();
   assert(privateIncome >= requiredMonthlyIncome, "Income below required minimum");
-  const nullifier = persistentHash<Vector<4, Bytes<32>>>([
+  const nullifier = persistentHash<Vector<2, Bytes<32>>>([
     pad(32, "proofly:claim:"),
-    applicationId,
-    requiredMonthlyIncome as Field as Bytes<32>,
-    applicantId()
+    applicationId
   ]);
   assert(!usedNullifiers.member(disclose(nullifier)), "Claim already used for this application");
   usedNullifiers.insert(disclose(nullifier), true);

@@ -69,9 +69,8 @@ Verified / denied
 | Data | Visibility | Purpose |
 |---|---|---|
 | Monthly income (`income`) | **Private witness** | The value being proved; never revealed |
-| Applicant identity (`applicantId`) | **Private witness** | Fresh per claim; scopes the claim and derives the nullifier; never shown on-chain |
 | Required threshold (`requiredMonthlyIncome`) | **Public** circuit argument | The requirement the income must meet |
-| Application ID (`applicationId`) | **Public** circuit argument | Claim-scoping input the proof is bound to |
+| Application ID (`applicationId`) | **Public** circuit argument | Claim-scoping input the proof is bound to; single-use |
 | `proofCount` | **Public** ledger | Monotonically increasing count of accepted claims |
 | `usedNullifiers` | **Public** ledger | On-chain replay-protection set |
 | Exact income | **Never stored on-chain** | Absent from ledger state, logs, URLs, storage, and any custom API |
@@ -82,26 +81,28 @@ Every network call goes to Midnight/Lace infrastructure and the public indexer.
 
 ## Replay protection
 
-Each accepted claim computes an on-chain nullifier scoped to:
+Each accepted claim discloses an on-chain nullifier derived **only** from the
+Application ID:
 
 ```
-persistentHash("proofly:claim:" || applicationId || threshold || applicantId)
+persistentHash("proofly:claim:" || applicationId)
 ```
 
-So a claim is unique to its **application scope + threshold + applicant
-identity**. Consequences (all verified by `tests/proofly.nullifier.test.ts`):
+The nullifier is **income-independent and threshold-independent** — the
+threshold is NOT part of it. So an **Application ID is single-use**:
 
-- **Same application, threshold, and identity re-claimed** → **denied**
-  (`Claim already used for this application`).
-- **Changing only the income** does not change the nullifier (income is not part
-  of it) → the scope + identity is already used → **denied**.
-- **Different `applicationId`** → a separate claim scope → accepted.
-- **Different applicant identity** → a separate scoped claim → accepted.
+| Re-claim scenario | Nullifier | Verdict |
+|---|---|---|
+| Same `applicationId`, same threshold | same | **denied** — `Claim already used for this application` |
+| Same `applicationId`, different threshold | same | **denied** — a threshold change cannot reset an Application ID |
+| Same `applicationId`, different income | same | **denied** — income is not part of the nullifier |
+| Different `applicationId` | different | **accepted** — an independent claim |
 
-In **Live Proof**, every claim generates a *fresh* identity (`crypto.getRandomValues`),
-so claiming an already-used application ID with a new identity is a valid,
-independent claim — exact contract-level replay of the identical triple is what
-the circuit itself refuses.
+So re-applying to an already-claimed Application ID is always denied, no matter
+how the threshold or income changes. There is **no applicant identity** and no
+device/browser-based fingerprinting — replay protection is enforced purely by
+the public Application ID scope on-chain. All of this is verified by
+`tests/proofly.nullifier.test.ts` and the Local Demo replay check.
 
 ## How it works
 
@@ -260,8 +261,9 @@ netlify.toml                              ← static publishing config (Level 4)
 
 Proofly is a **privacy-first, secret-free** application:
 
-- The only secrets — the income and the per-claim identity — are in-memory
-  React state and witness closures; they never leave the tab.
+- The only secret — the exact monthly income — is in-memory React state and the
+  witness closure; it never leaves the tab. Replay protection is scoped to the
+  public Application ID (single-use), with no applicant identity involved.
 - No `localStorage`/`sessionStorage`/`IndexedDB`, no URL encoding of state, no
   console leaks, no custom network calls.
 - No private keys, seeds, or credentials in the repository, tests, docs, CI,

@@ -18,7 +18,7 @@ reviewers, evaluators, Midnight/Compact reviewers.
 | Compact devtools 0.5.1 + toolchain 0.31.1 | `compact --version` → `compact 0.5.1`; `compact compile --version` → `0.31.1` |
 | Dependencies installed | `npm ci && npm --prefix frontend ci` |
 | Compiled artifacts present | `npm run compile` (idempotent, fast when cached) |
-| Full test suite green | `npm test` → **47 passing** |
+| Full test suite green | `npm test` → **52 passing** |
 | Lace wallet on Preprod, funded with tNIGHT/tDUST | wallet shows Preprod, sufficient dust |
 | Contract address configured for Live mode | `VITE_CONTRACT_ADDRESS` set in `frontend/.env` (or Netlify env); matches `docs/evidence/DEPLOYMENT.md` |
 
@@ -47,9 +47,10 @@ threshold, `loan-app-2026-01`) are pre-filled.
    public inputs (identical SHAs). State point: *the verifier cannot distinguish
    the two incomes.*
 3. **Check replay protection** → the sequence runs `[loan-app-2026-01] accepted
-   → [loan-app-2026-01-alt] accepted → [loan-app-2026-01] replay denied` under one
-   fixed in-memory identity. Observe the replay row and its exact reason
-   (`Claim already used for this application`).
+   → [loan-app-2026-01] replay denied (even after changing the threshold) →
+   [loan-app-2026-01-alt] accepted` against one accumulated in-memory ledger.
+   Observe the replay row and its exact reason (`Claim already used for this
+   application`).
 4. **Below-threshold** → set income `30000`, threshold `50000`, Generate → expect
    rejection with `Income below required minimum`.
 5. **Reset** defaults for the Live section.
@@ -71,14 +72,18 @@ Switch to **Live Preprod**.
      which must equal `previous + 1`.
    - **Observe the privacy property**: the income value is **never shown again**
      after submission — the panel shows only the public outcome.
-3. **Second claim, same application** → with a fresh identity per call this is a
-   *different* claim: expect `granted`, `proofCount` incremented again. This
-   demonstrates the fresh-identity semantics; exact contract-level replay (same
-   identity) is exercised by the local sequence and the test suite.
-4. **Below-threshold in Live** → income below threshold for a fresh application
+3. **Second claim, same application** → the Application ID is **single-use**, so
+   a second claim for the same `applicationId` is a replay of the claim scope
+   (regardless of threshold or income): expect `Proof denied — Claim already
+   used for this application`, with exact contract-level replay exercised locally
+   and by the test suite.
+4. **Claim a different application** → a new `applicationId` (e.g.
+   `loan-app-2026-B`) is independent: expect `granted`, `proofCount` incremented
+   again.
+5. **Below-threshold in Live** → income below threshold for a fresh application
    → expect `Proof denied — Income below required minimum` without wallet
    interaction.
-5. (Optional) ProofCounter cross-check: reconcile the number shown with the
+6. (Optional) ProofCounter cross-check: reconcile the number shown with the
    count of successful operations above.
 
 ## 6. On-chain verification (the explorer)
@@ -95,7 +100,7 @@ Switch to **Live Preprod**.
 |---|---|
 | Live panel disabled "no deployed contract" | `VITE_CONTRACT_ADDRESS` unset → configure and rebuild |
 | Connect succeeds but panel still disabled | Lace not on Preprod, or provider not found; reconnect on Preprod |
-| `Proof denied — Claim already used for this application` | Exact triple replay detected by preflight; use a fresh application id or identity |
+| `Proof denied — Claim already used for this application` | That `applicationId` was already claimed (single-use); use a different application id |
 | `Insufficient funds — obtain Preprod test tokens…` | Wallet lacks tDUST; fund through official faucet |
 | ProofCounter error "indexer returned no contract state" | Address/config typo or indexer lag; verify address in evidence file |
 | Tests fail with `[check-compiled]` | Run `npm run compile` first |
@@ -103,9 +108,8 @@ Switch to **Live Preprod**.
 ## 8. Cleanup and posture
 
 - Disconnect the wallet at the end; the app stores **nothing** — close the tab
-  and all in-memory state (income, applicant id) is gone.
-- No console, URL, network, or storage copy of income or `applicantId` is
-  produced at any point.
+  and all in-memory state (income) is gone.
+- No console, URL, network, or storage copy of income is produced at any point.
 
 ## 9. Recording the demo
 

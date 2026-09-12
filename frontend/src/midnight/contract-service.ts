@@ -2,14 +2,13 @@
  * Proofly — contract service (browser-only).
  *
  * Compiles the Proofly `CompiledContract` bound to REAL witness functions
- * (`midnight/witnesses.ts`) so the applicant's exact monthly income and fresh
- * claim identity flow through the zero-knowledge proofs, then finds the
- * deployed contract.
+ * (`midnight/witnesses.ts`) so the applicant's exact monthly income flows
+ * through the zero-knowledge proofs, then finds the deployed contract.
  *
- * `CC.make('proofly', Contract).pipe(CC.withWitnesses(createProoflyWitnesses(income, applicantId)))`
- * is the ShadowBid / ShadowPass-Level5 pattern: the income and applicant id are
- * supplied through the private witness closure, and `requiredMonthlyIncome` +
- * `applicationId` remain the ONLY public circuit arguments.
+ * `CC.make('proofly', Contract).pipe(CC.withWitnesses(createProoflyWitnesses(income)))`
+ * is the ShadowBid / ShadowPass-Level5 pattern: the income is supplied through
+ * the private witness closure, and `requiredMonthlyIncome` + `applicationId`
+ * remain the ONLY public circuit arguments.
  */
 
 import { CompiledContract } from '@midnight-ntwrk/compact-js';
@@ -38,10 +37,10 @@ function hexToBytes(hex: string): Uint8Array {
 
 export type DeployedContract = FoundContract<Contract>;
 
-/** Build the compiled Proofly contract for a single run, income + claim id bound as witnesses. */
-export function buildProoflyContract(income: bigint, applicantId: Uint8Array) {
+/** Build the compiled Proofly contract for a single run, income bound as witness. */
+export function buildProoflyContract(income: bigint) {
   return CC.make('proofly', Contract).pipe(
-    CC.withWitnesses(createProoflyWitnesses(income, applicantId)),
+    CC.withWitnesses(createProoflyWitnesses(income)),
   );
 }
 
@@ -56,13 +55,12 @@ export function buildProoflyContract(income: bigint, applicantId: Uint8Array) {
 export async function findProoflyContract(
   providers: ContractProviders,
   income: bigint,
-  applicantId: Uint8Array,
 ): Promise<DeployedContract> {
   if (!isContractConfigured()) {
     throw new Error(LIVE_DISABLED_REASON);
   }
   const deployed = await findDeployedContract(providers as ContractProviders, {
-    compiledContract: buildProoflyContract(income, applicantId),
+    compiledContract: buildProoflyContract(income),
     contractAddress: asContractAddress(CONTRACT_ADDRESS),
     privateStateId: PROOFLY_PRIVATE_STATE_ID,
     initialPrivateState: {},
@@ -91,41 +89,39 @@ export interface PreflightProofResult {
  * Local, unproven circuit preflight against the CURRENT on-chain ledger.
  *
  * Runs `Contract.circuits.proveIncome` — the SAME circuit and the SAME witness
- * closures (income + applicantId) and SAME public args (requiredMonthlyIncome +
- * applicationId) the real Live call uses — but WITHOUT generating a proof,
- * submitting a transaction, or touching the wallet's proving service. The on-chain
- * state comes from the existing `publicDataProvider.queryContractState` path
- * (used by refreshProofCount), so no new endpoint is introduced.
+ * closure (income) and SAME public args (requiredMonthlyIncome + applicationId)
+ * the real Live call uses — but WITHOUT generating a proof, submitting a
+ * transaction, or touching the wallet's proving service. The on-chain state
+ * comes from the existing `publicDataProvider.queryContractState` path (used
+ * by refreshProofCount), so no new endpoint is introduced.
  *
  * Compact assertions throw their EXACT messages here, deterministically: an
- * income below `requiredMonthlyIncome` yields
- * `Income below required minimum`, and an exact replay of the same income +
- * applicationId + applicantId (same nullifier) yields
- * `Claim already used for this application`. The caller maps those to
- * `Proof denied — <assertion>` and never asks the wallet to prove them. Fresh
- * applicantIds produce a new nullifier and remain valid (as in Live mode).
+ * income below `requiredMonthlyIncome` yields `Income below required minimum`,
+ * and a claim whose application-scoped nullifier is already in `usedNullifiers`
+ * yields `Claim already used for this application`. Because the nullifier is
+ * scoped to `applicationId` alone, ANY second claim for the same application is
+ * denied here before the wallet is ever involved. The caller maps those to
+ * `Proof denied — <assertion>`.
  *
  * A generic preflight failure (indexer down, decode error) is an ordinary
  * thrown Error; the caller must then fall through to the real wallet flow so
  * wallet/network/prover errors keep their existing handling.
  *
- * No income or applicantId is logged, persisted, or rendered (the demo coin
- * key is a static, public, throwaway credential — the assertions do not depend
- * on it).
+ * No income is logged, persisted, or rendered (the demo coin key is a static,
+ * public, throwaway credential — the assertions do not depend on it).
  */
 export async function preflightProveIncome(
   income: bigint,
   threshold: bigint,
   applicationId: string,
-  applicantId: Uint8Array,
   providers: { publicDataProvider: PublicDataProvider },
 ): Promise<PreflightProofResult> {
   if (!isContractConfigured()) {
     throw new Error(LIVE_DISABLED_REASON);
   }
 
-  // Same witness closures the real Live flow binds via `CC.withWitnesses`.
-  const contract = new Contract(createProoflyWitnesses<{}>(income, applicantId));
+  // Same witness closure the real Live flow binds via `CC.withWitnesses`.
+  const contract = new Contract(createProoflyWitnesses<{}>(income));
 
   // Current public ledger state (existing indexer path, read-only).
   const contractState = await providers.publicDataProvider.queryContractState(

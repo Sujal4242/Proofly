@@ -129,3 +129,45 @@ The deployer seed and all private credentials are intentionally NOT
 included. Reuses the existing dedicated L2 deployer wallet (same seed); no
 new credentials were generated for this deployment.
 
+---
+
+## Level L3 Deployment — Proofly with Replay Protection
+
+| Item | Value |
+|---|---|
+| **Network** | Midnight PREPROD (testnet; no real funds) |
+| **Contract address** | `c06250181abf7349097a6817774e9ef0119b10682d2f1cee6feed5df02c8d12b` |
+| **Transaction ID** | `0083d84f3b252bb7815209d1bc638f673a0f41a5de21017f32b2d7c1a15e152b59` |
+| **Block height** | 2511493 |
+| **Block hash** | `70247409f98300f38895a2cf36b7c5c46b094a698bbb3a2c8f6655d41d28c476` |
+| **Compact compiler** | 0.31.1 |
+| **Compact runtime** | 0.16.0 |
+| **Deployed at** | 2026-09-12T02:53:28.903Z |
+| **Deployer address (public)** | `mn_addr_preprod1zz4glm0avntr0qc0d8huwm5knz3utvr68jpcgl8rk79q3ltq73ysmaultu` |
+
+### Contract Surface (Level 3)
+
+- Circuit: `proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>)`
+- Ledger: `proofCount: Field`, `usedNullifiers: Map<Bytes<32>, Boolean>`
+- Private witnesses: `income(): Uint<32>`
+
+### Privacy & Replay Protection
+
+- Income is a private witness; only `requiredMonthlyIncome` and `applicationId`
+  are public circuit arguments. Exact income is never on-chain.
+- One deterministic, income/threshold-independent nullifier per claim:
+  `persistentHash(["proofly:claim:", applicationId])`.
+- An Application ID is SINGLE-USE: re-claiming the same `applicationId` is
+  rejected in-circuit with "Claim already used for this application", even
+  with a different threshold or income.
+- Cross-application claims are independent: each `applicationId` has its own
+  nullifier scope, so different applications never block each other.
+- No `applicantId` witness and no device/browser identity exist: the only
+  private input is the exact `income()`.
+
+### Security / Secrets
+
+The deployer seed and all private credentials are intentionally NOT
+included. Reuses the existing dedicated L2 deployer wallet (same seed); no
+new credentials were generated for this deployment.
+

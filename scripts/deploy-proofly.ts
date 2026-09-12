@@ -412,16 +412,16 @@ function createProviders(walletCtx: WalletContext, cfg: ReturnType<typeof networ
   };
 }
 
-// ─── Compiled Contract (income + applicant id witnesses wired as the frontend) ─
+// ─── Compiled Contract (income witness wired as the frontend) ──────────────
 // Deployment only initializes the ledger (proofCount = 0); proveIncome is never
-// invoked here, so the placeholder income and zero claimant id are never used.
+// invoked here, so the placeholder income is never used.
 // Built lazily so the validate/preflight path never touches the compiled artifacts.
 const CC: any = CompiledContract;
 
 async function buildCompiledContract() {
   const Proofly = await import(pathToFileURL(contractPath).href);
   return CC.make(CONTRACT_NAME, Proofly.Contract).pipe(
-    CC.withWitnesses(createProoflyWitnesses<{}>(0n, new Uint8Array(32))),
+    CC.withWitnesses(createProoflyWitnesses<{}>(0n)),
     CC.withCompiledFileAssets(zkConfigPath),
   );
 }
@@ -913,21 +913,21 @@ async function main(): Promise<void> {
     '',
     '- Circuit: `proveIncome(requiredMonthlyIncome: Uint<32>, applicationId: Bytes<32>)`',
     '- Ledger: `proofCount: Field`, `usedNullifiers: Map<Bytes<32>, Boolean>`',
-    '- Private witnesses: `income(): Uint<32>`, `applicantId(): Bytes<32>`',
+    '- Private witnesses: `income(): Uint<32>`',
     '',
     '### Privacy & Replay Protection',
     '',
     '- Income is a private witness; only `requiredMonthlyIncome` and `applicationId`',
     '  are public circuit arguments. Exact income is never on-chain.',
-    '- One deterministic, income-independent nullifier per claim:',
-    '  `persistentHash(["proofly:claim:", applicationId, requiredMonthlyIncome, applicantId])`.',
-    '- Replay of the same `(applicationId, requiredMonthlyIncome, applicantId)` triple',
-    '  is rejected in-circuit with "Claim already used for this application".',
+    '- One deterministic, income/threshold-independent nullifier per claim:',
+    '  `persistentHash(["proofly:claim:", applicationId])`.',
+    '- An Application ID is SINGLE-USE: re-claiming the same `applicationId` is',
+    '  rejected in-circuit with "Claim already used for this application", even',
+    '  with a different threshold or income.',
     '- Cross-application claims are independent: each `applicationId` has its own',
     '  nullifier scope, so different applications never block each other.',
-    '- `applicantId` is generated fresh per claim in the browser',
-    '  (`crypto.getRandomValues`); it is never stored, logged, or sent outside',
-    '  the local prover. It is not an identity system.',
+    '- No `applicantId` witness and no device/browser identity exist: the only',
+    '  private input is the exact `income()`.',
     '',
     '### Security / Secrets',
     '',

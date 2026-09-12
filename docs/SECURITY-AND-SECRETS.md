@@ -1,20 +1,22 @@
 # Proofly — Security and Secrets
 
-Proofly is a **privacy-first, secret-free** application: the only secrets in the
-system — the applicant's income and their per-claim identity — never leave the
-browser tab, and the repository contains **no** private keys, seeds, or
-credentials. This document records the guarantees, the audit surface, and the
-policy that keeps those guarantees true.
+Proofly is a **privacy-first, secret-free** application: the only secret in the
+system — the applicant's exact income — never leaves the browser tab, and the
+repository contains **no** private keys, seeds, or credentials. This document
+records the guarantees, the audit surface, and the policy that keeps those
+guarantees true.
 
 ## Threat model
 
 - **The verifier/lender** sees only the public surface: `proofCount`,
   `usedNullifiers`, `requiredMonthlyIncome`, `applicationId`, and the Groth16
-  transcript. They cannot learn the income or the applicant identity.
+  transcript. They cannot learn the income. Claim single-use is intentionally
+  public: the disclosed application-scoped nullifier and `usedNullifiers` show
+  which Application IDs have already claimed.
 - **The indexer / node / network** see the same public surface.
 - **A compromised static host** (Netlify) can serve a malicious page, but no
-  secrets are stored for it to steal, and income/applicant-id never touch any
-  external service.
+  secrets are stored for it to steal, and income never touches any external
+  service.
 - **A local attacker** on the applicant's machine shares the OS sandbox already
   trusted by the browser; the app adds no origin storage (see below).
 
@@ -36,10 +38,10 @@ policy that keeps those guarantees true.
 Verified across `frontend/src`:
 
 - **No persistent origin storage**: no `localStorage`, `sessionStorage`,
-  `IndexedDB`, or cookie writes. Nothing survives a page reload — income and
-  applicant id are in-memory React state only.
+  `IndexedDB`, or cookie writes. Nothing survives a page reload — income is
+  in-memory React state only.
 - **No console leaks**: no `console.log` / `info` / `debug`; only `warn`/`error`
-  for operational diagnostics that never include income or `applicantId`.
+  for operational diagnostics that never include income.
 - **No custom application network**: no `XMLHttpRequest`, raw `WebSocket`, or
   `fetch` to any custom/third-party backend or API. The one direct fetch is
   `FetchZkConfigProvider`, which loads Proofly's own compiled ZK assets
@@ -50,17 +52,32 @@ Verified across `frontend/src`:
   infrastructure. There is no server-side copy of applicant data.
 - **No URL leakage**: no state is encoded into the URL.
 
-## Where income and applicant id live (and don't)
+## Where income lives (and doesn't)
 
-- `income` and `applicantId` are bound into the **witness closure** only
-  (`createProoflyWitnesses(income, applicantId)` +
-  `CC.withWitnesses`) and passed into the local circuit / proof generation.
-- They never appear in `tx.public`, the public transcript, the preimage, the
+- `income` is bound into the **witness closure** only
+  (`createProoflyWitnesses(income)` + `CC.withWitnesses`) and passed into the
+  local circuit / proof generation. There is no `applicantId` witness.
+- It never appears in `tx.public`, the public transcript, the preimage, the
   ledger, console output, storage, or network payloads.
 - The Live UI deliberately never re-displays income; only the Local Demo tab
   shows the entered value, and it does so to demonstrate the privacy property.
 - The contract's two assertion strings (below-threshold, replay) are the only
   income-related messages, and they reveal nothing about the value.
+
+## Application-scoped replay protection (public by design)
+
+The on-chain nullifier is `persistentHash(["proofly:claim:", applicationId])`
+— keyed by the public `applicationId` **only**. Income and threshold are not
+part of it. Consequently:
+
+- An **Application ID is single-use**: a second claim for the same
+  `applicationId` is denied with `Claim already used for this application`,
+  regardless of threshold or income. This is intentionally observable via the
+  disclosed nullifier and the `usedNullifiers` ledger set.
+- Different Application IDs are independent claims; they never block each other.
+- No device identity, fingerprint, or persistent browser identity is used, and
+  no `applicantId` witness exists. Replay protection comes purely from the
+  public Application ID scope.
 
 ## Public values (safe to commit)
 

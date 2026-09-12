@@ -207,17 +207,18 @@ export default function App() {
             <div className="why-item">
               <h3>&#128274;&#160; On this device</h3>
               <p>
-                Your income and a fresh per-claim identity exist only inside the
-                proof as zero-knowledge witnesses. They are not stored, not
-                logged, and never sent anywhere.
+                Your exact income exists only inside the proof as a
+                zero-knowledge witness. It is not stored, not logged, and never
+                sent anywhere.
               </p>
             </div>
             <div className="why-item">
               <h3>&#128065;&#160; Only the threshold is public</h3>
               <p>
                 The verifier sees the required threshold, the application id,
-                the proof, and the resulting on-chain record — never the income,
-                and never the identity behind the claim.
+                the proof, and the resulting on-chain record — never the income.
+                The application id is a public, single-use claim scope: one
+                claim per application.
               </p>
             </div>
             <div className="why-item">
@@ -241,9 +242,9 @@ export default function App() {
             <span className="ttl">Replay protection</span>
             Because each claim is scoped to one application, the same claim
             cannot be reused to reach two verifiers or two applications.
-            Re-claiming an already-used application with the same identity is
-            rejected — <strong>&ldquo;This claim has already been used for this
-            application.&rdquo;</strong>
+            Re-claiming an already-used application — with any income or
+            threshold — is rejected: <strong>&ldquo;This claim has already been
+            used for this application.&rdquo;</strong>
           </div>
         </section>
 
