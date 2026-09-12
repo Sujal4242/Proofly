@@ -97,14 +97,11 @@ verifiable facts: repository files, on-chain deployment identifiers recorded in
 
 ## Requirement 4 — Product X Profile
 
-**Status: PENDING.**
+**Status: COMPLETE.**
 
-- No Product X (X/Twitter) profile link exists anywhere in this repository
-  (README or `docs/`), and none is claimed.
-- A Product X profile has **not** been created/linked yet.
-- **Action required before submission:** create the profile and link it in the
-  README. This document will not mark the requirement complete until the link
-  actually exists.
+- Product X profile (publicly accessible): <https://x.com/ProoflyMidnight>
+- The profile is live and is linked from the README
+  (`README.md` → "Live Demo & Evidence" → **Product X**).
 
 ---
 
@@ -174,7 +171,7 @@ The current config surfaces reference the **current** address:
 | Public GitHub repository with full documentation | **COMPLETE** | `Sujal4242/Proofly`, README + `docs/` |
 | Live Preprod demo link + contract address | **COMPLETE** | Live site + Requirement 6 |
 | CI/CD badge OR workflow file with passing runs | **COMPLETE** | `ci.yml`, run #13 success |
-| Link to Product X profile | **PENDING** | none exists in repo |
+| Link to Product X profile | **COMPLETE** | <https://x.com/ProoflyMidnight> linked from README |
 | Demo video of MVP | **COMPLETE** | <https://youtu.be/5YH5ETNPBCU> |
 | Minimum 15 meaningful commits | **COMPLETE** | 18 commits on `main` |
 
@@ -182,13 +179,11 @@ The current config surfaces reference the **current** address:
 
 ## Remaining Items
 
-1. **Product X profile (PENDING):** create the profile and add its link to the
-   README. Not claimed complete anywhere in this document.
-2. **September idea approval (PENDING):** no record of an approved idea /
+1. **September idea approval (PENDING):** no record of an approved idea /
    proposal from the provided idea list currently exists in the repository. If
    approval evidence exists outside the repo, record it here with non-secret
    provenance; it is not currently claimed complete.
-3. **Recommended (optional) supplement:** an on-chain explorer screenshot of the
+2. **Recommended (optional) supplement:** an on-chain explorer screenshot of the
    deployed contract address (Requirement 6 screenshot coverage) and a test
    runner screenshot (compile/test output with the 52 passing tests) would round
    out the visual evidence pack alongside the four live-demo screenshots.
