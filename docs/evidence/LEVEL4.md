@@ -83,9 +83,9 @@ verifiable facts: repository files, on-chain deployment identifiers recorded in
   **no deployments**.
 - **Verified passing run (read-only inspection of the project's GitHub Actions
   on 2026-09-12):**
-  - Commit: `e0ed0f8fd6485481815e34fad139b9c433833c5c`
-    (`docs: record Product X profile evidence`)
-  - GitHub Actions run `34689151329` (run **#16**) — **status `completed`,
+  - Commit: `e95ddd7f1fa078eda6a6c80eda352c1ae439b1d9`
+    (`docs: refresh Level 4 evidence status`)
+  - GitHub Actions run `34690404633` (run **#17**) — **status `completed`,
     conclusion `success`**; job `compile-test-build` passed.
   - Prior runs (#9–#12) also completed with `success`.
 - **CI badge** present in README:
@@ -170,7 +170,7 @@ The current config surfaces reference the **current** address:
 |---|---|---|
 | Public GitHub repository with full documentation | **COMPLETE** | `Sujal4242/Proofly`, README + `docs/` |
 | Live Preprod demo link + contract address | **COMPLETE** | Live site + Requirement 6 |
-| CI/CD badge OR workflow file with passing runs | **COMPLETE** | `ci.yml`, run #16 success |
+| CI/CD badge OR workflow file with passing runs | **COMPLETE** | `ci.yml`, run #17 success |
 | Link to Product X profile | **COMPLETE** | <https://x.com/ProoflyMidnight> linked from README |
 | Demo video of MVP | **COMPLETE** | <https://youtu.be/5YH5ETNPBCU> |
 | Minimum 15 meaningful commits | **COMPLETE** | 21 commits on `main` |
